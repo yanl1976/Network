@@ -53,3 +53,17 @@ function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// net-snmp 并发 subtree 取消时会在 socket close 回调里抛
+// "req.doneCb is not a function"，属库缺陷，无法用 try/catch 捕获，
+// 不处理会导致整个进程退出。这里只吞掉该特定异常，其余照常记录。
+let snmpIgnored = 0;
+process.on('uncaughtException', (error) => {
+  if (/doneCb is not a function/.test(error?.message || '') && /net-snmp/.test(error?.stack || '')) {
+    snmpIgnored += 1;
+    if (snmpIgnored === 1) console.warn('[net-snmp] 已忽略第三方库回调异常（后续静默计数）:', error.message);
+    return;
+  }
+  console.error('未捕获异常，进程退出:', error);
+  process.exit(1);
+});
