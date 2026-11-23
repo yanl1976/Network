@@ -11,7 +11,7 @@
    height="39.885487mm"
    width="41.915524mm">
   <defs
-     id="defs6166" />
+     id="defs6166" ><linearGradient id="h3cGrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#4dd0e1"/><stop offset="1" stop-color="#0086b3"/></linearGradient></defs>
   <metadata
      id="metadata6169">
     <rdf:RDF>
@@ -31,7 +31,7 @@
        id="g4144"
        transform="translate(0.5118018,-0.0474185)">
       <rect
-         style="opacity:1;fill:#396c85;fill-opacity:1;stroke:#314b58;stroke-width:4.48458481;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         style="opacity:1;fill:url(#h3cGrad);fill-opacity:1;stroke:#006b8f;stroke-width:4.48458481;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
          id="rect5784-3"
          width="144.03497"
          height="136.84193"

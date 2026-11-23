@@ -11,7 +11,7 @@
    height="46.428383mm"
    width="46.428383mm">
   <defs
-     id="defs8671" />
+     id="defs8671" ><linearGradient id="h3cGrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#42a5ff"/><stop offset="1" stop-color="#1565c0"/></linearGradient></defs>
   <metadata
      id="metadata8674">
     <rdf:RDF>
@@ -32,7 +32,7 @@
        id="g6069"
        style="display:inline">
       <circle
-         style="opacity:1;fill:#396c85;fill-opacity:1;stroke:#314b58;stroke-width:1.89093339;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         style="opacity:1;fill:url(#h3cGrad);fill-opacity:1;stroke:#0d47a1;stroke-width:1.89093339;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
          id="path4136-6-5"
          cx="433.68741"
          cy="261.59949"
