@@ -76,24 +76,45 @@ G6.registerNode('h3c-device', {
   }
 }, 'single-node');
 
-// 双向数据流边：沿链路相向运动的两个发光粒子，中断链路不显示流动
+// 双向数据流边：整条链路叠加两股反向流动的发光虚线 + 相向运动的数据包粒子
 G6.registerEdge('h3c-flow-edge', {
   afterDraw(cfg, group) {
     if (cfg.status === 'down') return;
     const keyShape = this.getKeyShape?.() || group.get('children')[0];
     if (!keyShape || typeof keyShape.getPoint !== 'function') return;
+    const path = keyShape.attr('path');
     const colors = ['#4df0ff', '#ffd166'];
     colors.forEach((color, index) => {
+      const forward = index === 0;
+      // 整线流动虚线：lineDashOffset 反向循环形成两个方向的数据流
+      const flow = group.addShape('path', {
+        attrs: {
+          path,
+          stroke: color,
+          lineWidth: 2,
+          lineDash: [10, 14],
+          lineDashOffset: 0,
+          opacity: 0.9,
+          shadowColor: color,
+          shadowBlur: 6
+        },
+        name: `flow-line-${index}`,
+        draggable: false
+      });
+      flow.animate((ratio) => ({ lineDashOffset: (forward ? -1 : 1) * ratio * 48 }), {
+        repeat: true, duration: 2200, easing: 'linear'
+      });
+      // 数据包粒子随流动方向运动
       const dot = group.addShape('circle', {
         attrs: { x: 0, y: 0, r: 3.2, fill: color, shadowColor: color, shadowBlur: 10, opacity: 0.95 },
         name: `flow-dot-${index}`,
         draggable: false
       });
       dot.animate((ratio) => {
-        const t = index === 0 ? ratio : 1 - ratio;
+        const t = forward ? ratio : 1 - ratio;
         const p = keyShape.getPoint(t);
         return p ? { x: p.x, y: p.y } : {};
-      }, { repeat: true, duration: 2600, easing: 'linear' });
+      }, { repeat: true, duration: 2200, easing: 'linear' });
     });
   }
 }, 'line');
@@ -120,10 +141,10 @@ function toG6Data(data) {
       type: 'h3c-flow-edge',
       label: showLabels.value ? e.label : '',
       style: {
-        stroke: e.status === 'down' ? '#ff4d5e' : '#3a7fd5',
-        lineWidth: e.status === 'down' ? 2.2 : 1.3,
-        lineDash: e.status === 'down' ? [6, 4] : [4, 4],
-        opacity: e.status === 'down' ? 0.95 : 0.62
+        stroke: e.status === 'down' ? '#ff4d5e' : '#2b4d78',
+        lineWidth: e.status === 'down' ? 2.2 : 3,
+        lineDash: e.status === 'down' ? [6, 4] : undefined,
+        opacity: e.status === 'down' ? 0.95 : 0.5
       },
       labelCfg: { autoRotate: true, style: { fill: '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
     }))
