@@ -106,7 +106,7 @@ export async function collectAllMacTables(config) {
   const targets = config.devices.filter((d) => d.enabled !== false && d.type !== 'server');
   const results = await Promise.allSettled(targets.map(async (device) => {
     const rows = await collectMacTable(device, config.snmp);
-    replaceMacEntries(device.ip, rows.map((r) => ({ ...r, device_id: db.prepare('SELECT id FROM devices WHERE ip=?').get(device.ip)?.id ?? null, device_name: device.name })));
+    replaceMacEntries(device.ip, rows.map((r) => ({ ...r, device_id: db.prepare('SELECT id FROM devices WHERE ip=?').get(device.ip)?.id ?? null, device_ip: device.ip, device_name: device.name })));
     return { ip: device.ip, name: device.name, count: rows.length };
   }));
   return results.map((r) => r.status === 'fulfilled' ? r.value : { ip: '-', count: 0, error: r.reason?.message });

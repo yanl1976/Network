@@ -249,7 +249,17 @@ export function replaceMacEntries(deviceIp, rows) {
       device_id=excluded.device_id, device_name=excluded.device_name, port=excluded.port, source=excluded.source, updated_at=excluded.updated_at`);
   db.transaction((list) => {
     db.prepare('DELETE FROM mac_entries WHERE device_ip=?').run(deviceIp);
-    for (const row of list) stmt.run({ ...row, updated_at: ts });
+    for (const row of list) stmt.run({
+      mac: row.mac,
+      device_id: row.device_id ?? null,
+      device_ip: deviceIp,
+      device_name: row.device_name ?? '',
+      if_index: row.if_index ?? 0,
+      port: row.port ?? '',
+      vlan: row.vlan ?? '',
+      source: row.source ?? '',
+      updated_at: ts
+    });
   })(rows);
 }
 
