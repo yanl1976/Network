@@ -1,0 +1,54 @@
+{
+  "mode": "demo",
+  "snmp": {
+    "community": "public",
+    "version": "2c",
+    "timeout": 3000,
+    "retries": 1
+  },
+  "ssh": {
+    "port": 22,
+    "username": "admin",
+    "password": "",
+    "timeout": 10000
+  },
+  "scan": {
+    "subnets": ["192.168.10.0/24", "192.168.20.0/24", "192.168.30.0/24"],
+    "ports": [22, 161, 80, 443],
+    "timeoutMs": 600,
+    "concurrency": 64
+  },
+  "poll": {
+    "intervalSec": 60,
+    "historyLimit": 720,
+    "thresholds": {
+      "cpuWarn": 70,
+      "cpuCritical": 90,
+      "memWarn": 75,
+      "memCritical": 90,
+      "portUtilWarn": 80,
+      "offlineAfterSec": 180
+    }
+  },
+  "devices": [
+    { "ip": "192.168.10.1", "name": "CORE-01", "role": "core", "model": "H3C S6520X-54QC-EI", "location": "中心机房A柜" },
+    { "ip": "192.168.10.2", "name": "CORE-02", "role": "core", "model": "H3C S6520X-54QC-EI", "location": "中心机房B柜" },
+    { "ip": "192.168.10.11", "name": "AGG-01", "role": "aggregation", "model": "H3C S6520X-30QC-EI", "location": "1号楼弱电间" },
+    { "ip": "192.168.10.12", "name": "AGG-02", "role": "aggregation", "model": "H3C S6520X-30QC-EI", "location": "2号楼弱电间" },
+    { "ip": "192.168.10.13", "name": "AGG-03", "role": "aggregation", "model": "H3C S6520X-30QC-EI", "location": "3号楼弱电间" },
+    { "ip": "192.168.20.11", "name": "ACC-01", "role": "access", "model": "H3C S5130S-28P-EI", "location": "1号楼1F" },
+    { "ip": "192.168.20.12", "name": "ACC-02", "role": "access", "model": "H3C S5130S-28P-EI", "location": "1号楼2F" },
+    { "ip": "192.168.20.13", "name": "ACC-03", "role": "access", "model": "H3C S5130S-28P-EI", "location": "1号楼3F" },
+    { "ip": "192.168.20.14", "name": "ACC-04", "role": "access", "model": "H3C S5130S-28P-EI", "location": "2号楼1F" },
+    { "ip": "192.168.20.15", "name": "ACC-05", "role": "access", "model": "H3C S5130S-28P-EI", "location": "2号楼2F" },
+    { "ip": "192.168.20.16", "name": "ACC-06", "role": "access", "model": "H3C S5130S-28P-EI", "location": "2号楼3F" },
+    { "ip": "192.168.20.17", "name": "ACC-07", "role": "access", "model": "H3C S5130S-28P-EI", "location": "3号楼1F" },
+    { "ip": "192.168.20.18", "name": "ACC-08", "role": "access", "model": "H3C S5130S-28P-EI", "location": "3号楼2F" },
+    { "ip": "192.168.10.254", "name": "FW-01", "role": "border", "model": "H3C SecPath F100-C-G5", "location": "中心机房出口区" },
+    { "ip": "192.168.10.253", "name": "RT-01", "role": "border", "model": "H3C MSR3600-28", "location": "中心机房出口区" },
+    { "ip": "192.168.30.11", "name": "SRV-01", "role": "server", "model": "H3C R4900 G3", "location": "服务器区" },
+    { "ip": "192.168.30.12", "name": "SRV-02", "role": "server", "model": "H3C R4900 G3", "location": "服务器区" },
+    { "ip": "192.168.30.13", "name": "SRV-03", "role": "server", "model": "H3C R4900 G3", "location": "服务器区" },
+    { "ip": "192.168.30.14", "name": "SRV-04", "role": "server", "model": "H3C R4900 G3", "location": "服务器区" }
+  ]
+}

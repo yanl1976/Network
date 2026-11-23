@@ -1,0 +1,154 @@
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue';
+import { Search, Refresh, Document } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
+import { api } from '../api.js';
+import { store } from '../store.js';
+
+const roleColors = { core: '#7c5cff', aggregation: '#2f8fff', access: '#21c2b8', border: '#ff9f43', server: '#8d9db6' };
+const statusMap = { online: ['在线', 'success'], warning: ['告警', 'warning'], critical: ['严重', 'danger'], offline: ['离线', 'info'] };
+const devices = ref([]);
+const keyword = ref('');
+const roleFilter = ref('');
+const statusFilter = ref('');
+const detail = ref(null);
+const drawer = ref(false);
+const configText = ref('');
+const configDialog = ref(false);
+const loading = ref(false);
+
+const filtered = computed(() => devices.value.filter((d) => {
+  const q = keyword.value.trim().toLowerCase();
+  return (!q || [d.hostname, d.ip, d.model, d.location].some((v) => String(v ?? '').toLowerCase().includes(q)))
+    && (!roleFilter.value || d.role === roleFilter.value)
+    && (!statusFilter.value || d.status === statusFilter.value);
+}));
+
+async function load() {
+  loading.value = true;
+  try { devices.value = await api.devices(); } finally { loading.value = false; }
+}
+
+async function openDetail(row) {
+  detail.value = await api.device(row.id);
+  drawer.value = true;
+}
+
+async function viewConfig(id) {
+  const data = await api.configContent(id);
+  configText.value = data.content;
+  configDialog.value = true;
+}
+
+async function backupAll() {
+  const result = await api.backup();
+  ElMessage.success(`配置备份完成：成功 ${result.filter((r) => r.ok).length} 台，失败 ${result.filter((r) => !r.ok).length} 台`);
+  await load();
+}
+
+function statusTag(status) {
+  const [label, type] = statusMap[status] || [status, 'info'];
+  return type;
+}
+
+onMounted(load);
+watch(() => store.seq, () => { if (['poll:done', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
+</script>
+
+<template>
+  <div class="page-wrap">
+    <div class="page-head">
+      <div><h2>设备清单</h2><div class="sub">共 {{ devices.length }} 台 H3C 网络设备 · 点击查看端口与配置详情</div></div>
+      <div style="display:flex;gap:8px">
+        <el-button :icon="Refresh" size="small" @click="load">刷新</el-button>
+        <el-button type="primary" size="small" @click="backupAll">批量备份配置</el-button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="filter-bar">
+        <el-input v-model="keyword" placeholder="搜索设备名称 / IP / 型号 / 位置" :prefix-icon="Search" size="small" style="width:280px" clearable />
+        <el-select v-model="roleFilter" placeholder="设备角色" size="small" clearable style="width:150px">
+          <el-option label="核心交换机" value="core" /><el-option label="汇聚交换机" value="aggregation" />
+          <el-option label="接入交换机" value="access" /><el-option label="边界设备" value="border" /><el-option label="服务器" value="server" />
+        </el-select>
+        <el-select v-model="statusFilter" placeholder="运行状态" size="small" clearable style="width:140px">
+          <el-option label="在线" value="online" /><el-option label="告警" value="warning" /><el-option label="严重" value="critical" /><el-option label="离线" value="offline" />
+        </el-select>
+        <span class="muted" style="margin-left:auto;font-size:12px">筛选结果 {{ filtered.length }} 台</span>
+      </div>
+      <el-table :data="filtered" size="small" v-loading="loading" @row-click="openDetail" style="width:100%">
+        <el-table-column prop="hostname" label="设备名称" min-width="130">
+          <template #default="{ row }"><span class="status-dot" :class="'status-' + row.status" />{{ row.hostname }}</template>
+        </el-table-column>
+        <el-table-column prop="ip" label="管理 IP" width="132" class-name="mono" />
+        <el-table-column label="角色" width="110"><template #default="{ row }"><el-tag size="small" effect="dark" :color="roleColors[row.role]" style="border:0">{{ row.roleLabel }}</el-tag></template></el-table-column>
+        <el-table-column prop="model" label="型号" min-width="170" />
+        <el-table-column prop="location" label="位置" min-width="130" />
+        <el-table-column label="状态" width="84"><template #default="{ row }"><el-tag :type="statusTag(row.status)" size="small" effect="dark">{{ statusMap[row.status]?.[0] || row.status }}</el-tag></template></el-table-column>
+        <el-table-column label="CPU" width="104"><template #default="{ row }"><el-progress :percentage="row.cpu ?? 0" :stroke-width="6" :show-text="false" :color="row.cpu >= 90 ? '#ff4d5e' : row.cpu >= 70 ? '#ffb020' : '#2f8fff'" /><span class="muted" style="font-size:10px">{{ row.cpu }}%</span></template></el-table-column>
+        <el-table-column label="内存" width="104"><template #default="{ row }"><el-progress :percentage="row.memory ?? 0" :stroke-width="6" :show-text="false" :color="row.memory >= 90 ? '#ff4d5e' : row.memory >= 75 ? '#ffb020' : '#a06bff'" /><span class="muted" style="font-size:10px">{{ row.memory }}%</span></template></el-table-column>
+        <el-table-column prop="interface_count" label="端口" width="64" align="center" />
+        <el-table-column label="告警" width="64" align="center"><template #default="{ row }"><span :style="{ color: row.alert_count ? '#ff4d5e' : '#4b6386' }">{{ row.alert_count }}</span></template></el-table-column>
+      </el-table>
+    </div>
+
+    <el-drawer v-model="drawer" :title="detail?.hostname || '设备详情'" size="480px">
+      <template v-if="detail">
+        <div class="drawer-meta">
+          <div><span>管理 IP</span><b class="mono">{{ detail.ip }}</b></div>
+          <div><span>设备型号</span><b>{{ detail.model }}</b></div>
+          <div><span>序列号</span><b class="mono">{{ detail.serial }}</b></div>
+          <div><span>安装位置</span><b>{{ detail.location }}</b></div>
+          <div><span>运行时间</span><b>{{ detail.uptime }}</b></div>
+          <div><span>系统描述</span><b>{{ detail.sys_descr }}</b></div>
+        </div>
+        <div class="drawer-section">
+          <div class="drawer-title">端口状态 <span class="muted">({{ detail.interfaces?.length || 0 }})</span></div>
+          <el-table :data="detail.interfaces || []" size="small" max-height="260">
+            <el-table-column prop="if_name" label="端口" width="110" class-name="mono" />
+            <el-table-column label="状态" width="76"><template #default="{ row }"><span class="status-dot" :class="row.oper_status === 1 ? 'status-online' : 'status-offline'" />{{ row.oper_status === 1 ? 'UP' : 'DOWN' }}</template></el-table-column>
+            <el-table-column prop="if_speed" label="速率"><template #default="{ row }">{{ row.if_speed >= 1e9 ? (row.if_speed / 1e9) + ' Gbps' : (row.if_speed / 1e6) + ' Mbps' }}</template></el-table-column>
+            <el-table-column label="入/出利用率"><template #default="{ row }">{{ (row.in_util || 0).toFixed(1) }}% / {{ (row.out_util || 0).toFixed(1) }}%</template></el-table-column>
+          </el-table>
+        </div>
+        <div class="drawer-section">
+          <div class="drawer-title">配置备份 <span class="muted">({{ detail.configs?.length || 0 }})</span></div>
+          <div v-if="!detail.configs?.length" class="muted" style="font-size:12px">暂无配置备份，可在设备清单页执行批量备份</div>
+          <div v-for="cfg in detail.configs || []" :key="cfg.id" class="config-row">
+            <el-icon><Document /></el-icon>
+            <span class="mono">{{ cfg.hash.slice(0, 10) }}</span>
+            <span class="muted">{{ cfg.captured_at?.replace('T', ' ').slice(0, 19) }}</span>
+            <span class="muted">{{ cfg.bytes }} B</span>
+            <el-button link type="primary" size="small" @click="viewConfig(cfg.id)">查看</el-button>
+          </div>
+        </div>
+        <div class="drawer-section">
+          <div class="drawer-title">告警记录</div>
+          <div v-if="!detail.alerts?.length" class="muted" style="font-size:12px">无告警记录</div>
+          <div v-for="a in detail.alerts || []" :key="a.id" class="config-row">
+            <span class="status-dot" :class="a.severity === 'critical' ? 'status-critical' : 'status-warning'" />
+            <span>{{ a.message }}</span><b>{{ a.value }}</b>
+            <span class="muted">{{ a.active ? '活动中' : '已恢复' }}</span>
+          </div>
+        </div>
+      </template>
+    </el-drawer>
+
+    <el-dialog v-model="configDialog" title="交换机配置快照" width="70%">
+      <pre class="config-text">{{ configText }}</pre>
+    </el-dialog>
+  </div>
+</template>
+
+<style scoped>
+.filter-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.drawer-meta { display: grid; gap: 9px; font-size: 12px; padding-bottom: 12px; }
+.drawer-meta > div { display: flex; justify-content: space-between; gap: 14px; }
+.drawer-meta span { color: var(--muted); flex: 0 0 76px; }
+.drawer-meta b { font-weight: 500; text-align: right; }
+.drawer-section { margin-top: 16px; }
+.drawer-title { font-size: 13px; font-weight: 600; margin-bottom: 9px; color: #cfe0ff; }
+.config-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
+.config-text { max-height: 60vh; overflow: auto; background: #080e1c; color: #9fd0ff; font-size: 11px; line-height: 1.5; padding: 14px; border-radius: 6px; }
+</style>
