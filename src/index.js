@@ -55,15 +55,26 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // net-snmp 并发 subtree 取消时会在 socket close 回调里抛
-// "req.doneCb is not a function"，属库缺陷，无法用 try/catch 捕获，
-// 不处理会导致整个进程退出。这里只吞掉该特定异常，其余照常记录。
+// "req.doneCb is not a function"，属库缺陷，无法用 try/catch 捕获。
+// 该异常可能以 uncaughtException 或 unhandledRejection 两种形式出现
+// （取决于所运行的 Node 版本），两者都要吞掉该特定异常，否则进程退出。
+function isNetSnmpCallbackError(error) {
+  return /doneCb is not a function/.test(error?.message || '') && /net-snmp/.test(error?.stack || '');
+}
 let snmpIgnored = 0;
+function ignoreNetSnmp(error) {
+  if (!isNetSnmpCallbackError(error)) return false;
+  snmpIgnored += 1;
+  if (snmpIgnored === 1) console.warn('[net-snmp] 已忽略第三方库回调异常（后续静默计数）:', error.message);
+  return true;
+}
 process.on('uncaughtException', (error) => {
-  if (/doneCb is not a function/.test(error?.message || '') && /net-snmp/.test(error?.stack || '')) {
-    snmpIgnored += 1;
-    if (snmpIgnored === 1) console.warn('[net-snmp] 已忽略第三方库回调异常（后续静默计数）:', error.message);
-    return;
-  }
+  if (ignoreNetSnmp(error)) return;
   console.error('未捕获异常，进程退出:', error);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  if (ignoreNetSnmp(reason)) return;
+  console.error('未处理的 Promise 拒绝，进程退出:', reason);
   process.exit(1);
 });

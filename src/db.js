@@ -5,7 +5,10 @@ import path from 'node:path';
 const dataDir = path.resolve(import.meta.dirname, '..', 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
-export const db = new Database(path.join(dataDir, 'network.db'));
+const dbFile = path.join(dataDir, 'network.db');
+try { fs.accessSync(dataDir, fs.constants.W_OK); }
+catch { console.error(`[db] 数据目录不可写：${dataDir}（生产机用 pm2 直跑时需保证运行用户对 data/ 有写权限，例如 sudo chown -R yl:yl /opt/Network/data）`); }
+export const db = new Database(dbFile);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
