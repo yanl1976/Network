@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { Search, Refresh, Document } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
 import { store } from '../store.js';
 
@@ -16,6 +16,56 @@ const drawer = ref(false);
 const configText = ref('');
 const configDialog = ref(false);
 const loading = ref(false);
+const managed = ref([]);
+const editDialog = ref(false);
+const editing = ref(false);
+const form = ref({});
+
+const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
+
+async function loadManaged() {
+  managed.value = await api.managedDevices();
+}
+
+function openAdd() {
+  editing.value = false;
+  form.value = emptyForm();
+  editDialog.value = true;
+}
+
+function openEdit(row) {
+  const m = managed.value.find((d) => d.ip === row.ip) || {};
+  editing.value = true;
+  form.value = { ...emptyForm(), ...m, username: '', password: '', superPassword: '' };
+  editDialog.value = true;
+}
+
+async function saveDevice() {
+  const f = form.value;
+  const payload = {
+    name: f.name, ip: f.ip, role: f.role, type: f.type, model: f.model, location: f.location,
+    username: f.username, password: f.password, superPassword: f.superPassword,
+    clearCredentials: f.clearCredentials
+  };
+  try {
+    if (editing.value) await api.updateDevice(f.ip, payload);
+    else await api.addDevice(payload);
+    editDialog.value = false;
+    ElMessage.success(editing.value ? '设备已更新，凭据已同步到 .env' : '设备已新增，凭据已同步到 .env');
+    await loadManaged();
+    await load();
+  } catch (error) { ElMessage.error(error.message); }
+}
+
+async function deleteDevice(row) {
+  await ElMessageBox.confirm(`确定删除设备 ${row.hostname}（${row.ip}）？其 .env 凭据也会一并删除。`, '删除设备', { type: 'warning' });
+  try {
+    await api.deleteDevice(row.ip);
+    ElMessage.success('设备已删除');
+    await loadManaged();
+    await load();
+  } catch (error) { ElMessage.error(error.message); }
+}
 
 const filtered = computed(() => devices.value.filter((d) => {
   const q = keyword.value.trim().toLowerCase();
@@ -51,8 +101,8 @@ function statusTag(status) {
   return type;
 }
 
-onMounted(load);
-watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
+onMounted(() => { load(); loadManaged(); });
+watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed', 'devices:changed'].includes(store.event?.type)) { load(); loadManaged(); } });
 </script>
 
 <template>
@@ -61,6 +111,7 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
       <div><h2>设备清单</h2><div class="sub">共 {{ devices.length }} 台 H3C 网络设备 · 点击查看端口与配置详情</div></div>
       <div style="display:flex;gap:8px">
         <el-button :icon="Refresh" size="small" @click="load">刷新</el-button>
+        <el-button size="small" @click="openAdd">新增设备</el-button>
         <el-button type="primary" size="small" @click="backupAll">批量备份配置</el-button>
       </div>
     </div>
@@ -90,6 +141,11 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-table-column label="内存" width="104"><template #default="{ row }"><el-progress :percentage="row.memory ?? 0" :stroke-width="6" :show-text="false" :color="row.memory >= 90 ? '#ff4d5e' : row.memory >= 75 ? '#ffb020' : '#a06bff'" /><span class="muted" style="font-size:10px">{{ row.memory }}%</span></template></el-table-column>
         <el-table-column prop="interface_count" label="端口" width="64" align="center" />
         <el-table-column label="告警" width="64" align="center"><template #default="{ row }"><span :style="{ color: row.alert_count ? '#ff4d5e' : '#4b6386' }">{{ row.alert_count }}</span></template></el-table-column>
+        <el-table-column label="登录信息" width="100" align="center"><template #default="{ row }"><el-tag size="small" :type="managed.find((d) => d.ip === row.ip)?.credentialsConfigured ? 'success' : 'info'" effect="plain">{{ managed.find((d) => d.ip === row.ip)?.credentialsConfigured ? '已配置' : '未配置' }}</el-tag></template></el-table-column>
+        <el-table-column label="操作" width="120" fixed="right"><template #default="{ row }">
+          <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
+          <el-button link type="danger" size="small" @click.stop="deleteDevice(row)">删除</el-button>
+        </template></el-table-column>
       </el-table>
     </div>
 
@@ -135,6 +191,26 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
       </template>
     </el-drawer>
 
+    <el-dialog v-model="editDialog" :title="editing ? '编辑设备' : '新增设备'" width="560px">
+      <el-form :model="form" label-width="96px" size="small">
+        <el-form-item label="设备名称"><el-input v-model="form.name" placeholder="如 CORE-01" /></el-form-item>
+        <el-form-item label="管理 IP"><el-input v-model="form.ip" placeholder="如 192.168.10.1" :disabled="editing" /></el-form-item>
+        <el-form-item label="设备角色"><el-select v-model="form.role" style="width:100%"><el-option label="核心交换机" value="core" /><el-option label="汇聚交换机" value="aggregation" /><el-option label="接入交换机" value="access" /><el-option label="边界设备" value="border" /><el-option label="服务器" value="server" /></el-select></el-form-item>
+        <el-form-item label="设备类型"><el-select v-model="form.type" style="width:100%"><el-option label="交换机" value="switch" /><el-option label="防火墙" value="firewall" /><el-option label="路由器" value="router" /><el-option label="服务器" value="server" /></el-select></el-form-item>
+        <el-form-item label="型号"><el-input v-model="form.model" placeholder="如 H3C S6520X-54QC-EI" /></el-form-item>
+        <el-form-item label="位置"><el-input v-model="form.location" placeholder="如 中心机房A柜" /></el-form-item>
+        <div class="cred-divider">SSH 登录信息（写入 .env，与凭据表同步）</div>
+        <el-form-item label="用户名"><el-input v-model="form.username" placeholder="留空表示沿用当前/env全局" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password placeholder="留空表示不修改" /></el-form-item>
+        <el-form-item label="super 密码"><el-input v-model="form.superPassword" type="password" show-password placeholder="留空表示不修改" /></el-form-item>
+        <el-form-item v-if="editing" label="清除凭据"><el-checkbox v-model="form.clearCredentials">删除该设备在 .env 中的登录信息</el-checkbox></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="editDialog = false">取消</el-button>
+        <el-button type="primary" size="small" @click="saveDevice">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="configDialog" title="交换机配置快照" width="70%">
       <pre class="config-text">{{ configText }}</pre>
     </el-dialog>
@@ -151,4 +227,5 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .drawer-title { font-size: 13px; font-weight: 600; margin-bottom: 9px; color: #cfe0ff; }
 .config-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
 .config-text { max-height: 60vh; overflow: auto; background: #080e1c; color: #9fd0ff; font-size: 11px; line-height: 1.5; padding: 14px; border-radius: 6px; }
+.cred-divider { font-size: 12px; color: #cfe0ff; font-weight: 600; margin: 6px 0 12px 96px; padding-top: 12px; border-top: 1px solid var(--border); }
 </style>

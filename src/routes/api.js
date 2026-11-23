@@ -1,5 +1,5 @@
 import express from 'express';
-import { loadConfig, updateSettings, publicConfig } from '../config.js';
+import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice, updateDevice, removeDevice } from '../config.js';
 import { db } from '../db.js';
 import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
@@ -12,6 +12,31 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   const router = express.Router();
 
   router.get('/overview', (_req, res) => ok(res, getOverview(configHolder.current)));
+  router.get('/managed-devices', (_req, res) => ok(res, getManagedDevices()));
+  router.post('/managed-devices', (req, res) => {
+    try {
+      const device = addDevice(req.body ?? {});
+      configHolder.current = loadConfig();
+      broadcast({ type: 'devices:changed' });
+      return ok(res, device);
+    } catch (error) { return fail(res, error.message); }
+  });
+  router.put('/managed-devices/:ip', (req, res) => {
+    try {
+      const device = updateDevice(req.params.ip, req.body ?? {});
+      configHolder.current = loadConfig();
+      broadcast({ type: 'devices:changed' });
+      return ok(res, device);
+    } catch (error) { return fail(res, error.message); }
+  });
+  router.delete('/managed-devices/:ip', (req, res) => {
+    try {
+      const result = removeDevice(req.params.ip);
+      configHolder.current = loadConfig();
+      broadcast({ type: 'devices:changed' });
+      return ok(res, result);
+    } catch (error) { return fail(res, error.message); }
+  });
   router.get('/devices', (_req, res) => ok(res, getDevices()));
   router.get('/devices/:id', (req, res) => {
     const data = getDeviceDetail(Number(req.params.id));

@@ -25,7 +25,11 @@ export const api = {
   settings: () => request('/settings'),
   saveSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   setMode: (mode) => request('/mode', { method: 'POST', body: JSON.stringify({ mode }) }),
-  reseed: () => request('/reseed', { method: 'POST' })
+  reseed: () => request('/reseed', { method: 'POST' }),
+  managedDevices: () => request('/managed-devices'),
+  addDevice: (data) => request('/managed-devices', { method: 'POST', body: JSON.stringify(data) }),
+  updateDevice: (ip, data) => request(`/managed-devices/${encodeURIComponent(ip)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDevice: (ip) => request(`/managed-devices/${encodeURIComponent(ip)}`, { method: 'DELETE' })
 };
 
 export function watchEvents(onMessage) {
