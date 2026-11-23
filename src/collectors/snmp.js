@@ -53,15 +53,16 @@ function subtree(session, oid, decoder = readable) {
   return new Promise((resolve) => {
     const out = [];
     let settled = false;
-    const timer = setTimeout(() => { if (!settled) { settled = true; resolve(out); } }, (session.timeout ?? 3000) * 2);
+    const finish = () => { if (!settled) { settled = true; clearTimeout(timer); resolve(out); } };
+    const timer = setTimeout(finish, (session.timeout ?? 3000) * 2);
     try {
+      // net-snmp 的 subtree(oid, feedCb, doneCb) 必须传第三个完成回调，
+      // 否则库在数据遍历结束时会调用 req.doneCb(null) 抛 "doneCb is not a function"。
       session.subtree(oid, (varbinds) => {
         out.push(...varbinds.filter((vb) => vb && !(vb.value instanceof Error)).map((vb) => ({ oid: String(vb.oid), value: decoder(vb.value) })));
-        if (!settled) { settled = true; clearTimeout(timer); resolve(out); }
-      });
+      }, finish);
     } catch {
-      clearTimeout(timer);
-      resolve(out);
+      finish();
     }
   });
 }
