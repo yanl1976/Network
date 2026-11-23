@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS devices (
   serial TEXT,
   vendor TEXT DEFAULT 'H3C',
   role TEXT DEFAULT 'access',
+  device_type TEXT DEFAULT 'switch',
   location TEXT,
   status TEXT DEFAULT 'unknown',
   cpu REAL DEFAULT 0,
@@ -100,19 +101,22 @@ CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(active, created_at);
 CREATE INDEX IF NOT EXISTS idx_metrics_device_ts ON metrics(device_id, ts);
 `);
 
+const columns = db.prepare('PRAGMA table_info(devices)').all().map((c) => c.name);
+if (!columns.includes('device_type')) db.exec("ALTER TABLE devices ADD COLUMN device_type TEXT DEFAULT 'switch'");
+
 const now = () => new Date().toISOString();
 
 export function upsertDevice(info) {
   const ts = now();
   const existing = db.prepare('SELECT id FROM devices WHERE ip = ?').get(info.ip);
   if (existing) {
-    db.prepare(`UPDATE devices SET hostname=?, sys_descr=?, model=?, serial=?, role=?, location=?, status=?, cpu=?, memory=?, uptime=?, last_seen=?, updated_at=? WHERE ip=?`)
-      .run(info.hostname ?? null, info.sys_descr ?? null, info.model ?? null, info.serial ?? null, info.role ?? 'access', info.location ?? null, info.status ?? 'online', info.cpu ?? 0, info.memory ?? 0, info.uptime ?? null, ts, ts, info.ip);
+    db.prepare(`UPDATE devices SET hostname=?, sys_descr=?, model=?, serial=?, role=?, device_type=?, location=?, status=?, cpu=?, memory=?, uptime=?, last_seen=?, updated_at=? WHERE ip=?`)
+      .run(info.hostname ?? null, info.sys_descr ?? null, info.model ?? null, info.serial ?? null, info.role ?? 'access', info.deviceType ?? 'switch', info.location ?? null, info.status ?? 'online', info.cpu ?? 0, info.memory ?? 0, info.uptime ?? null, ts, ts, info.ip);
     return existing.id;
   }
-  const result = db.prepare(`INSERT INTO devices (ip, hostname, sys_descr, model, serial, role, location, status, cpu, memory, uptime, last_seen, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(info.ip, info.hostname ?? null, info.sys_descr ?? null, info.model ?? null, info.serial ?? null, info.role ?? 'access', info.location ?? null, info.status ?? 'online', info.cpu ?? 0, info.memory ?? 0, info.uptime ?? null, ts, ts, ts);
+  const result = db.prepare(`INSERT INTO devices (ip, hostname, sys_descr, model, serial, role, device_type, location, status, cpu, memory, uptime, last_seen, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(info.ip, info.hostname ?? null, info.sys_descr ?? null, info.model ?? null, info.serial ?? null, info.role ?? 'access', info.deviceType ?? 'switch', info.location ?? null, info.status ?? 'online', info.cpu ?? 0, info.memory ?? 0, info.uptime ?? null, ts, ts, ts);
   return Number(result.lastInsertRowid);
 }
 

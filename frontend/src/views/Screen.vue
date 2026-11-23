@@ -5,10 +5,18 @@ import G6 from '@antv/g6';
 import * as echarts from 'echarts';
 import { api } from '../api.js';
 import { store } from '../store.js';
+import { drawDeviceIcon, typeColor, TYPE_COLORS } from '../device-icons.js';
 
 const router = useRouter();
-const roleColors = { core: '#7c5cff', aggregation: '#2f8fff', access: '#21c2b8', border: '#ff9f43', server: '#8d9db6' };
-const roleLabels = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
+const legendItems = [
+  { label: '核心交换机', color: TYPE_COLORS.switchCore },
+  { label: '汇聚交换机', color: TYPE_COLORS.switchAgg },
+  { label: '接入交换机', color: TYPE_COLORS.switchAccess },
+  { label: '防火墙', color: TYPE_COLORS.firewall },
+  { label: '路由器', color: TYPE_COLORS.router },
+  { label: '服务器', color: TYPE_COLORS.server }
+];
+const roleToColor = { core: TYPE_COLORS.switchCore, aggregation: TYPE_COLORS.switchAgg, access: TYPE_COLORS.switchAccess, border: TYPE_COLORS.router, server: TYPE_COLORS.server };
 
 const graphRef = ref(null);
 const pieRef = ref(null);
@@ -42,7 +50,7 @@ const ticker = computed(() => {
 G6.registerNode('h3c-screen-node', {
   draw(cfg, group) {
     const size = cfg.size || 32;
-    const color = roleColors[cfg.role] || '#2f8fff';
+    const color = typeColor(cfg);
     const offline = cfg.status === 'offline';
     const alert = cfg.status === 'critical' || cfg.status === 'warning';
     const alertColor = cfg.status === 'critical' ? '#ff4d5e' : '#ffb020';
@@ -59,11 +67,7 @@ G6.registerNode('h3c-screen-node', {
       },
       name: 'box', draggable: true
     });
-    if (!offline) {
-      for (let i = 0; i < 3; i++) {
-        group.addShape('rect', { attrs: { x: -size / 4, y: -size / 7 + i * (size / 5), width: size / 2, height: Math.max(2, size / 15), fill: '#fff', opacity: 0.65, radius: 1 }, name: `p${i}` });
-      }
-    }
+    drawDeviceIcon(group, cfg, size, offline);
     group.addShape('text', {
       attrs: { text: cfg.label, x: 0, y: size / 2 + 16, fill: offline ? '#8598b7' : '#e8f2ff', fontSize: 12, fontWeight: 600, textAlign: 'center', textBaseline: 'middle', shadowColor: '#000', shadowBlur: 6 },
       name: 'label'
@@ -117,7 +121,7 @@ function buildPie() {
       itemStyle: { borderColor: '#0b1324', borderWidth: 3 },
       label: { show: true, color: '#9fb4d6', fontSize: 10, formatter: '{b}\n{c}' },
       labelLine: { length: 8, length2: 8, lineStyle: { color: '#2b4469' } },
-      data: (overview.value.byRole || []).map((r) => ({ name: r.label, value: r.count, itemStyle: { color: roleColors[r.role] } }))
+      data: (overview.value.byRole || []).map((r) => ({ name: r.label, value: r.count, itemStyle: { color: roleToColor[r.role] || '#2f8fff' } }))
     }]
   });
 }
@@ -225,7 +229,7 @@ watch(() => store.seq, () => {
         <div class="map-head">
           <div class="map-title">实时网络拓扑图</div>
           <div class="map-legend">
-            <span v-for="(color, role) in roleColors" :key="role"><i :style="{ background: color }" />{{ roleLabels[role] }}</span>
+            <span v-for="item in legendItems" :key="item.label"><i :style="{ background: item.color }" />{{ item.label }}</span>
             <span><i style="background:#ff4d5e" />告警</span>
             <span><i style="background:#64748b" />离线</span>
           </div>

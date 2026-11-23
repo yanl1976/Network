@@ -9,7 +9,7 @@ const draft = ref({});
 const saving = ref(false);
 const subnetInput = ref('');
 
-const roleColors = { core: '#7c5cff', aggregation: '#2f8fff', access: '#21c2b8', border: '#ff9f43', server: '#8d9db6' };
+import { typeColor } from '../device-icons.js';
 
 async function load() {
   config.value = await api.settings();
@@ -145,7 +145,7 @@ onMounted(load);
       <el-table :data="config.devices" size="small" style="width:100%">
         <el-table-column prop="name" label="设备名称" min-width="130" />
         <el-table-column prop="ip" label="管理 IP" width="140" class-name="mono" />
-        <el-table-column label="角色" width="120"><template #default="{ row }"><el-tag size="small" effect="dark" :color="roleColors[row.role]" style="border:0">{{ row.role }}</el-tag></template></el-table-column>
+        <el-table-column label="设备类型" width="120"><template #default="{ row }"><el-tag size="small" effect="dark" :color="typeColor(row)" style="border:0">{{ ({ switch: '交换机', firewall: '防火墙', router: '路由器', server: '服务器' })[row.type || 'switch'] }}</el-tag></template></el-table-column>
         <el-table-column prop="model" label="型号" min-width="180" />
         <el-table-column prop="location" label="位置" min-width="140" />
       </el-table>

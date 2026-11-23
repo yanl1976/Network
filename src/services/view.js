@@ -2,6 +2,16 @@ import { db } from '../db.js';
 
 const roleLabel = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
 
+function deviceTypeOf(row) {
+  if (row.device_type) return row.device_type;
+  const name = (row.hostname || '').toUpperCase();
+  const model = row.model || '';
+  if (name.startsWith('FW') || /SECPATH|F100/i.test(model)) return 'firewall';
+  if (name.startsWith('RT') || /MSR\s?\d/i.test(model)) return 'router';
+  if (name.startsWith('SRV') || row.role === 'server') return 'server';
+  return 'switch';
+}
+
 export function getOverview(config) {
   const devices = db.prepare('SELECT status, cpu, memory, role FROM devices').all();
   const alerts = db.prepare('SELECT severity, type, device_ip FROM alerts WHERE active=1').all();
@@ -31,7 +41,7 @@ export function getDevices() {
     (SELECT COUNT(*) FROM interfaces i WHERE i.device_id=d.id) AS interface_count,
     (SELECT COUNT(*) FROM alerts a WHERE a.device_id=d.id AND a.active=1) AS alert_count
     FROM devices d ORDER BY CASE d.role WHEN 'core' THEN 0 WHEN 'aggregation' THEN 1 WHEN 'border' THEN 2 WHEN 'access' THEN 3 ELSE 4 END, d.ip`);
-  return rows.all().map((row) => ({ ...row, roleLabel: roleLabel[row.role] ?? row.role }));
+  return rows.all().map((row) => ({ ...row, deviceType: deviceTypeOf(row), roleLabel: roleLabel[row.role] ?? row.role }));
 }
 
 export function getDeviceDetail(id) {
@@ -41,11 +51,11 @@ export function getDeviceDetail(id) {
   const metrics = db.prepare('SELECT cpu, memory, in_traffic, out_traffic, ts FROM metrics WHERE device_id=? ORDER BY ts DESC LIMIT 60').all(id).reverse();
   const alerts = db.prepare('SELECT * FROM alerts WHERE device_id=? ORDER BY created_at DESC LIMIT 20').all(id);
   const configs = db.prepare('SELECT id, hash, captured_at, LENGTH(content) AS bytes FROM configs WHERE device_id=? ORDER BY captured_at DESC LIMIT 20').all(id);
-  return { ...device, roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs };
+  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs };
 }
 
 export function getTopology() {
-  const devices = db.prepare('SELECT id, ip, hostname, role, status, cpu, memory, model, location FROM devices').all();
+  const devices = db.prepare('SELECT id, ip, hostname, role, device_type, status, cpu, memory, model, location FROM devices').all();
   const deviceByIp = new Map(devices.map((d) => [d.ip, d]));
   const links = db.prepare('SELECT * FROM links').all();
   const seen = new Set();
@@ -76,6 +86,7 @@ export function getTopology() {
     label: d.hostname || d.ip,
     ip: d.ip,
     role: d.role,
+    deviceType: deviceTypeOf(d),
     roleLabel: roleLabel[d.role] ?? d.role,
     status: d.status,
     cpu: d.cpu,

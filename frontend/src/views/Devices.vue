@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus';
 import { api } from '../api.js';
 import { store } from '../store.js';
 
-const roleColors = { core: '#7c5cff', aggregation: '#2f8fff', access: '#21c2b8', border: '#ff9f43', server: '#8d9db6' };
+import { typeColor } from '../device-icons.js';
 const statusMap = { online: ['在线', 'success'], warning: ['告警', 'warning'], critical: ['严重', 'danger'], offline: ['离线', 'info'] };
 const devices = ref([]);
 const keyword = ref('');
@@ -82,7 +82,7 @@ watch(() => store.seq, () => { if (['poll:done', 'data:reset', 'mode:changed'].i
           <template #default="{ row }"><span class="status-dot" :class="'status-' + row.status" />{{ row.hostname }}</template>
         </el-table-column>
         <el-table-column prop="ip" label="管理 IP" width="132" class-name="mono" />
-        <el-table-column label="角色" width="110"><template #default="{ row }"><el-tag size="small" effect="dark" :color="roleColors[row.role]" style="border:0">{{ row.roleLabel }}</el-tag></template></el-table-column>
+        <el-table-column label="设备类型" width="110"><template #default="{ row }"><el-tag size="small" effect="dark" :color="typeColor(row)" style="border:0">{{ ({ switch: '交换机', firewall: '防火墙', router: '路由器', server: '服务器' })[row.deviceType] || row.roleLabel }}</el-tag></template></el-table-column>
         <el-table-column prop="model" label="型号" min-width="170" />
         <el-table-column prop="location" label="位置" min-width="130" />
         <el-table-column label="状态" width="84"><template #default="{ row }"><el-tag :type="statusTag(row.status)" size="small" effect="dark">{{ statusMap[row.status]?.[0] || row.status }}</el-tag></template></el-table-column>

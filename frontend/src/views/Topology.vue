@@ -5,8 +5,16 @@ import * as echarts from 'echarts';
 import { Refresh, RefreshRight, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue';
 import { api } from '../api.js';
 import { store } from '../store.js';
+import { drawDeviceIcon, typeColor, TYPE_COLORS } from '../device-icons.js';
 
-const roleColors = { core: '#7c5cff', aggregation: '#2f8fff', access: '#21c2b8', border: '#ff9f43', server: '#8d9db6' };
+const legendItems = [
+  { label: '核心交换机', color: TYPE_COLORS.switchCore },
+  { label: '汇聚交换机', color: TYPE_COLORS.switchAgg },
+  { label: '接入交换机', color: TYPE_COLORS.switchAccess },
+  { label: '防火墙', color: TYPE_COLORS.firewall },
+  { label: '路由器', color: TYPE_COLORS.router },
+  { label: '服务器', color: TYPE_COLORS.server }
+];
 const roleLabels = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
 const statusLabels = { online: '在线', warning: '告警', critical: '严重', offline: '离线' };
 
@@ -50,12 +58,7 @@ G6.registerNode('h3c-device', {
       name: 'device-box',
       draggable: true
     });
-    for (let i = 0; i < 3; i++) {
-      group.addShape('rect', {
-        attrs: { x: -size / 4, y: -size / 7 + i * (size / 5), width: size / 2, height: Math.max(1.5, size / 16), fill: '#ffffff', opacity: 0.6, radius: 1 },
-        name: `port-${i}`
-      });
-    }
+    drawDeviceIcon(group, cfg, size, cfg.status === 'offline');
     group.addShape('text', {
       attrs: { text: cfg.label, x: 0, y: size / 2 + 15, fill: '#e6f0ff', fontSize: 11, fontWeight: 500, textAlign: 'center', textBaseline: 'middle' },
       name: 'device-label'
@@ -65,7 +68,7 @@ G6.registerNode('h3c-device', {
 }, 'single-node');
 
 function nodeStyle(n) {
-  const color = roleColors[n.role] || '#2f8fff';
+  const color = typeColor(n);
   const offline = n.status === 'offline';
   const alertColor = n.status === 'critical' ? '#ff4d5e' : n.status === 'warning' ? '#ffb020' : null;
   return {
@@ -244,7 +247,7 @@ watch(() => store.seq, () => {
           <div ref="containerRef" class="graph-canvas" />
           <div class="legend">
             <div class="legend-title">图例</div>
-            <div v-for="(color, role) in roleColors" :key="role" class="legend-item"><span class="legend-dot" :style="{ background: color }" />{{ roleLabels[role] }}</div>
+            <div v-for="item in legendItems" :key="item.label" class="legend-item"><span class="legend-dot" :style="{ background: item.color }" />{{ item.label }}</div>
             <div class="legend-sep" />
             <div class="legend-item"><span class="legend-dot status-dot" style="background:#ff4d5e" />告警</div>
             <div class="legend-item"><span class="legend-dot" style="background:#64748b" />离线</div>
@@ -266,7 +269,7 @@ watch(() => store.seq, () => {
             <div class="detail-name">{{ detail.hostname }}</div>
             <div class="detail-ip mono">{{ detail.ip }}</div>
             <div class="detail-tags">
-              <el-tag size="small" :color="roleColors[detail.role]" effect="dark" style="border:0">{{ detail.roleLabel }}</el-tag>
+              <el-tag size="small" :color="typeColor(detail)" effect="dark" style="border:0">{{ detail.deviceType ? ({ switch: '交换机', firewall: '防火墙', router: '路由器', server: '服务器' }[detail.deviceType] || detail.roleLabel) : detail.roleLabel }}</el-tag>
               <el-tag size="small" :type="detail.status === 'online' ? 'success' : detail.status === 'offline' ? 'info' : 'danger'" effect="dark">{{ statusLabels[detail.status] || detail.status }}</el-tag>
             </div>
           </div>
@@ -318,7 +321,7 @@ watch(() => store.seq, () => {
       <div class="panel-title">设备快速定位 <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">{{ filteredDevices.length }} 台</span></div>
       <div class="device-chips">
         <button v-for="d in filteredDevices" :key="d.ip" class="device-chip" :class="{ active: selectedIp === d.ip, offline: d.status === 'offline' }" @click="selectNode(d.ip)">
-          <span class="chip-dot" :style="{ background: d.status === 'offline' ? '#64748b' : roleColors[d.role] }" />
+          <span class="chip-dot" :style="{ background: d.status === 'offline' ? '#64748b' : typeColor(d) }" />
           {{ d.hostname }}
         </button>
       </div>

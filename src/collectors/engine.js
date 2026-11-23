@@ -45,7 +45,7 @@ export async function pollOnce(config) {
       const data = await collectSnmp(device, config.snmp);
       const deviceId = upsertDevice({
         ip: device.ip, hostname: data.hostname || device.name, sysDescr: data.sysDescr, model: data.model,
-        role: device.role, location: device.location, status: 'online', cpu: data.cpu, memory: data.memory,
+        role: device.role, deviceType: device.type ?? 'switch', location: device.location, status: 'online', cpu: data.cpu, memory: data.memory,
         uptime: data.uptime, last_seen: new Date().toISOString()
       });
       replaceInterfaces(deviceId, data.interfaces);

@@ -36,7 +36,7 @@ npm start
    - `"mode": "live"`
    - `snmp.community` / `snmp.version`：现场 SNMP 团体字与版本
    - `ssh.username` / `ssh.password`：设备 SSH 凭据
-   - `devices`：现场设备清单（IP、名称、角色、型号、位置）
+   - `devices`：现场设备清单（IP、名称、角色、型号、位置），`type` 可选 `switch`/`firewall`/`router`/`server`，决定拓扑图上的专用设备图标
    - `scan.subnets`：需要扫描的网段
 3. 确保设备已开启 SNMP 与 SSH（H3C 示例）：
 

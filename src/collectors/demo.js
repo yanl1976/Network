@@ -58,6 +58,7 @@ export function seedDemo(config) {
       model: device.model,
       serial: `H3C${device.ip.split('.').pop().padStart(4, '0')}X`,
       role: device.role,
+      deviceType: device.type ?? 'switch',
       location: device.location,
       status: offline ? 'offline' : 'online',
       cpu: Math.round(baseCpu),
