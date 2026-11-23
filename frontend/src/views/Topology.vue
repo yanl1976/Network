@@ -76,42 +76,39 @@ G6.registerNode('h3c-device', {
   }
 }, 'single-node');
 
-// 双向数据流边：整条链路叠加两股反向流动的发光虚线 + 相向运动的数据包粒子
+// 双向数据流边：整条链路一股流动虚线 + 相向运动的数据包粒子
 G6.registerEdge('h3c-flow-edge', {
   afterDraw(cfg, group) {
     if (cfg.status === 'down') return;
     const keyShape = this.getKeyShape?.() || group.get('children')[0];
     if (!keyShape || typeof keyShape.getPoint !== 'function') return;
-    const path = keyShape.attr('path');
-    const colors = ['#4df0ff', '#ffd166'];
-    colors.forEach((color, index) => {
-      const forward = index === 0;
-      // 整线流动虚线：lineDashOffset 反向循环形成两个方向的数据流
-      const flow = group.addShape('path', {
-        attrs: {
-          path,
-          stroke: color,
-          lineWidth: 2,
-          lineDash: [10, 14],
-          lineDashOffset: 0,
-          opacity: 0.9,
-          shadowColor: color,
-          shadowBlur: 6
-        },
-        name: `flow-line-${index}`,
-        draggable: false
-      });
-      flow.animate((ratio) => ({ lineDashOffset: (forward ? -1 : 1) * ratio * 48 }), {
-        repeat: true, duration: 2200, easing: 'linear'
-      });
-      // 数据包粒子随流动方向运动
+    // 整线仅一股流动虚线，避免两股叠加杂乱
+    const flow = group.addShape('path', {
+      attrs: {
+        path: keyShape.attr('path'),
+        stroke: '#4df0ff',
+        lineWidth: 2,
+        lineDash: [10, 14],
+        lineDashOffset: 0,
+        opacity: 0.9,
+        shadowColor: '#4df0ff',
+        shadowBlur: 6
+      },
+      name: 'flow-line',
+      draggable: false
+    });
+    flow.animate((ratio) => ({ lineDashOffset: -ratio * 48 }), {
+      repeat: true, duration: 2200, easing: 'linear'
+    });
+    // 相向运动的数据包粒子体现双向传输
+    ['#4df0ff', '#ffd166'].forEach((color, index) => {
       const dot = group.addShape('circle', {
         attrs: { x: 0, y: 0, r: 3.2, fill: color, shadowColor: color, shadowBlur: 10, opacity: 0.95 },
         name: `flow-dot-${index}`,
         draggable: false
       });
       dot.animate((ratio) => {
-        const t = forward ? ratio : 1 - ratio;
+        const t = index === 0 ? ratio : 1 - ratio;
         const p = keyShape.getPoint(t);
         return p ? { x: p.x, y: p.y } : {};
       }, { repeat: true, duration: 2200, easing: 'linear' });
