@@ -53,7 +53,13 @@ export function sshExec(device, sshCfg, command) {
       if (!needSuper) {
         conn.exec(command, (err, stream) => {
           if (err) { errorText += err.message; return finish(false); }
-          stream.on('data', (chunk) => { output += chunk.toString('utf8'); });
+          stream.on('data', (chunk) => {
+            const text = chunk.toString('utf8');
+            output += text;
+            if (/--\s*More\s*--/i.test(text)) {
+              try { stream.write(' '); } catch { /* ignore */ }
+            }
+          });
           stream.stderr.on('data', (chunk) => { errorText += chunk.toString('utf8'); });
           stream.on('close', () => finish(true));
         });
@@ -114,7 +120,8 @@ export function sshExec(device, sshCfg, command) {
 }
 
 export async function fetchConfig(device, sshCfg) {
-  const result = await sshExec(device, sshCfg, COMWARE_COMMANDS.config);
+  const cfg = { ...sshCfg, timeout: Math.max(sshCfg?.timeout ?? 10000, 60000) };
+  const result = await sshExec(device, cfg, COMWARE_COMMANDS.config);
   return { ...result, ip: device.ip };
 }
 
