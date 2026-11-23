@@ -26,6 +26,11 @@ function readable(value) {
   return String(value);
 }
 
+function macAddr(value) {
+  if (Buffer.isBuffer(value) && value.length === 6) return value.toString('hex').match(/../g).join(':');
+  return readable(value);
+}
+
 function number(value) {
   const n = Number(readable(value));
   return Number.isFinite(n) ? n : 0;
@@ -44,14 +49,14 @@ function get(session, oids) {
   });
 }
 
-function subtree(session, oid) {
+function subtree(session, oid, decoder = readable) {
   return new Promise((resolve) => {
     const out = [];
     let settled = false;
     const timer = setTimeout(() => { if (!settled) { settled = true; resolve(out); } }, (session.timeout ?? 3000) * 2);
     try {
       session.subtree(oid, (varbinds) => {
-        out.push(...varbinds.filter((vb) => vb && !(vb.value instanceof Error)).map((vb) => ({ oid: String(vb.oid), value: readable(vb.value) })));
+        out.push(...varbinds.filter((vb) => vb && !(vb.value instanceof Error)).map((vb) => ({ oid: String(vb.oid), value: decoder(vb.value) })));
         if (!settled) { settled = true; clearTimeout(timer); resolve(out); }
       });
     } catch {
@@ -105,7 +110,7 @@ export async function collectSnmp(device, snmpCfg) {
       subtree(session, OID.h3cCpu), subtree(session, OID.h3cMem), subtree(session, OID.hrProcessorLoad),
       subtree(session, OID.ifDescr), subtree(session, OID.ifSpeed), subtree(session, OID.ifOperStatus),
       subtree(session, OID.ifInOctets), subtree(session, OID.ifOutOctets),
-      subtree(session, OID.lldpRemChassis), subtree(session, OID.lldpRemPortId),
+      subtree(session, OID.lldpRemChassis, macAddr), subtree(session, OID.lldpRemPortId),
       subtree(session, OID.lldpRemPortDesc), subtree(session, OID.lldpRemSysName)
     ]);
 

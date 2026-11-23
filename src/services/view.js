@@ -51,7 +51,33 @@ export function getDeviceDetail(id) {
   const metrics = db.prepare('SELECT cpu, memory, in_traffic, out_traffic, ts FROM metrics WHERE device_id=? ORDER BY ts DESC LIMIT 60').all(id).reverse();
   const alerts = db.prepare('SELECT * FROM alerts WHERE device_id=? ORDER BY created_at DESC LIMIT 20').all(id);
   const configs = db.prepare('SELECT id, hash, captured_at, LENGTH(content) AS bytes FROM configs WHERE device_id=? ORDER BY captured_at DESC LIMIT 20').all(id);
-  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs };
+  const linkRows = db.prepare(`SELECT l.*, peer.ip AS peer_ip, peer.hostname AS peer_hostname, peer.role AS peer_role, peer.status AS peer_status
+    FROM links l LEFT JOIN devices peer ON peer.id=l.remote_device_id
+    WHERE l.local_device_id=? OR l.remote_device_id=? ORDER BY l.updated_at DESC`).all(id, id);
+  const links = linkRows.map((l) => {
+    const isLocal = l.local_device_id === id;
+    const peerIp = isLocal ? (l.remote_ip || l.peer_ip) : db.prepare('SELECT ip FROM devices WHERE id=?').get(l.local_device_id)?.ip ?? null;
+    const peer = peerIp ? db.prepare('SELECT hostname, role, model, status FROM devices WHERE ip=?').get(peerIp) : null;
+    const localPort = isLocal ? l.local_port : l.remote_port;
+    const remotePort = isLocal ? l.remote_port : l.local_port;
+    const known = !!peer;
+    const up = known && device.status !== 'offline' && peer.status !== 'offline';
+    return {
+      id: l.id,
+      peerIp: peerIp || l.remote_chassis || '',
+      peerName: peer?.hostname || l.peer_hostname || '',
+      peerRole: peer?.role || l.peer_role || '',
+      peerModel: peer?.model || '',
+      localPort: localPort || '',
+      remotePort: remotePort || '',
+      direction: isLocal ? 'out' : 'in',
+      known,
+      status: known ? (up ? 'up' : 'down') : 'unknown',
+      bandwidth: l.bandwidth || '',
+      updatedAt: l.updated_at
+    };
+  });
+  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs, links };
 }
 
 export function getTopology() {

@@ -169,6 +169,22 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
           </el-table>
         </div>
         <div class="drawer-section">
+          <div class="drawer-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
+          <div v-if="!detail.links?.length" class="muted" style="font-size:12px">暂无链路数据</div>
+          <el-table v-else :data="detail.links || []" size="small" max-height="300">
+            <el-table-column label="对端设备" min-width="130">
+              <template #default="{ row }">
+                <span class="status-dot" :class="row.status === 'up' ? 'status-online' : row.status === 'down' ? 'status-offline' : ''" />
+                <b>{{ row.peerName || row.peerIp || '未知设备' }}</b>
+              </template>
+            </el-table-column>
+            <el-table-column label="对端 IP" width="130" class-name="mono"><template #default="{ row }">{{ row.peerIp || '-' }}</template></el-table-column>
+            <el-table-column label="本端端口" min-width="140" class-name="mono"><template #default="{ row }">{{ row.localPort || '-' }}</template></el-table-column>
+            <el-table-column label="对端端口" min-width="140" class-name="mono"><template #default="{ row }">{{ row.remotePort || '-' }}</template></el-table-column>
+            <el-table-column label="状态" width="80"><template #default="{ row }">{{ row.status === 'up' ? '正常' : row.status === 'down' ? '中断' : '未知' }}</template></el-table-column>
+          </el-table>
+        </div>
+        <div class="drawer-section">
           <div class="drawer-title">配置备份 <span class="muted">({{ detail.configs?.length || 0 }})</span></div>
           <div v-if="!detail.configs?.length" class="muted" style="font-size:12px">暂无配置备份，可在设备清单页执行批量备份</div>
           <div v-for="cfg in detail.configs || []" :key="cfg.id" class="config-row">

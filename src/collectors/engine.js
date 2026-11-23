@@ -11,7 +11,8 @@ export function isSeeded() {
 function resolveRemoteDevice(neighbor, config) {
   const name = (neighbor.remoteSysName || '').trim().toUpperCase();
   const chassis = (neighbor.remoteChassis || '').trim();
-  const found = config.devices.find((d) => d.name?.toUpperCase() === name || d.ip === chassis || d.ip === neighbor.remoteIp);
+  const mac = chassis.toLowerCase();
+  const found = config.devices.find((d) => d.name?.toUpperCase() === name || d.ip === chassis || d.ip === neighbor.remoteIp || (d.mac && d.mac.toLowerCase() === mac));
   return { ip: found?.ip ?? chassis, deviceId: found ? db.prepare('SELECT id FROM devices WHERE ip=?').get(found.ip)?.id ?? null : null, name: found?.name ?? neighbor.remoteSysName ?? '' };
 }
 

@@ -307,6 +307,28 @@ watch(() => store.seq, () => {
             </div>
           </div>
           <div class="detail-section">
+            <div class="mini-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
+            <div v-if="!(detail.links || []).length" class="muted" style="font-size:12px">暂无链路数据</div>
+            <div v-for="link in (detail.links || [])" :key="link.id" class="link-item" :class="{ 'link-unknown': !link.known }">
+              <div class="link-peer">
+                <span class="port-dot" :class="link.status === 'up' ? 'up' : link.status === 'down' ? 'down' : ''" />
+                <b>{{ link.peerName || link.peerIp || '未知设备' }}</b>
+                <span class="muted mono">{{ link.peerIp }}</span>
+              </div>
+              <div class="link-ports mono">
+                <span>本端 {{ link.localPort || '-' }}</span>
+                <span class="link-arrow">→</span>
+                <span>对端 {{ link.remotePort || '-' }}</span>
+              </div>
+              <div class="link-meta muted">
+                {{ link.known ? ({ core: '核心', aggregation: '汇聚', access: '接入', border: '边界', server: '服务器' }[link.peerRole] || link.peerRole) : '未识别邻居' }}
+                <span v-if="link.bandwidth"> · {{ link.bandwidth }}</span>
+                <span> · {{ link.direction === 'out' ? '主动发现' : '被动发现' }}</span>
+                <span> · {{ link.status === 'up' ? '正常' : link.status === 'down' ? '中断' : '未知' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="detail-section">
             <div class="mini-title">当前告警 <span class="muted">({{ (detail.alerts || []).filter(a => a.active).length }})</span></div>
             <div v-if="!(detail.alerts || []).some(a => a.active)" class="muted" style="font-size:12px">无活动告警</div>
             <div v-for="alert in (detail.alerts || []).filter(a => a.active)" :key="alert.id" class="detail-alert">
@@ -371,6 +393,13 @@ watch(() => store.seq, () => {
 .port-dot.up { background: var(--success); }
 .port-dot.down { background: var(--danger); }
 .detail-alert { font-size: 11px; color: #ffc4c9; margin: 5px 0; display: flex; align-items: center; }
+.link-item { border: 1px solid var(--border); border-radius: 5px; background: rgba(20,33,58,.6); padding: 6px 8px; margin: 5px 0; font-size: 11px; }
+.link-item.link-unknown { opacity: .6; }
+.link-peer { display: flex; align-items: center; gap: 6px; color: #d6e4f7; }
+.link-peer .port-dot { flex: 0 0 auto; }
+.link-ports { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: #9fb4d6; font-size: 10px; }
+.link-arrow { color: var(--primary); }
+.link-meta { font-size: 10px; margin-top: 3px; }
 .detail-actions { padding: 10px 16px; margin-top: auto; border-top: 1px solid var(--border); display: flex; gap: 8px; }
 .device-strip { flex: 0 0 132px; }
 .device-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; overflow: auto; }
