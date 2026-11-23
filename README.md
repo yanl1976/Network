@@ -18,14 +18,36 @@
 
 ## 快速开始
 
+首次部署准备依赖与前端构建（一次性）：
+
 ```powershell
 npm install
 npm --prefix frontend install
 npm run build
-npm start
 ```
 
-浏览器打开 <http://localhost:3000>，全屏展示页为 <http://localhost:3000/screen>。
+之后用 **1 条命令** 启动整套系统（API + WebSocket + 前端，单进程）：
+
+```powershell
+pm2 start ecosystem.config.cjs
+```
+
+`src/index.js` 自身已托管 `frontend/dist`，无需单独起前端服务。默认端口 `3200`，被占用时自动 +1 递增。
+
+常用 pm2 运维：
+
+```powershell
+pm2 list                    # 查看进程
+pm2 logs h3c-network        # 实时日志
+pm2 restart h3c-network     # 重启
+pm2 stop h3c-network        # 停止
+pm2 delete h3c-network      # 移除托管
+pm2 save && pm2 resurrect   # 保存/恢复进程列表
+```
+
+不使用 pm2 时直接 `npm start` 亦可。
+
+浏览器打开 <http://localhost:3200>，全屏展示页为 <http://localhost:3200/screen>。
 
 默认以**演示模式**启动，内置 19 台 H3C 设备（2 核心 / 3 汇聚 / 8 接入 / 2 边界 / 4 服务器）、21 条链路和预置告警，无需真实设备即可体验完整功能。
 
