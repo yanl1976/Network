@@ -156,24 +156,26 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-button size="small" type="primary" :loading="macLoading" @click="doMacLookup">定位</el-button>
       </div>
       <div v-if="macResult" class="mac-result">
-        <div class="muted" style="font-size:12px;margin-bottom:8px">MAC {{ macResult.mac }} · 已检查 {{ macResult.checked }} 台设备 · 命中 {{ macResult.matches.length }} 处</div>
-        <div v-for="m in macResult.matches" :key="m.deviceIp" class="mac-match">
-          <span class="status-dot status-online" />
-          <b>{{ m.deviceName || m.deviceIp }}</b>
-          <span class="mono muted">{{ m.deviceIp }}</span>
-          <el-tag size="small" effect="dark" type="success">端口 {{ m.port }}</el-tag>
-          <span class="muted" style="font-size:11px">{{ m.source === 'dot1q' ? 'VLAN FDB' : 'FDB' }} · ifIndex {{ m.ifIndex }}</span>
-          <el-button link type="primary" size="small" @click="openMacDevice(m.deviceIp)">设备详情</el-button>
-          <el-button link type="primary" size="small" @click="locateOnTopology(m.deviceIp)">拓扑定位</el-button>
-        </div>
-        <div v-if="m.path?.length > 1" class="mac-path">
-          <span class="muted" style="font-size:11px">上行路径：</span>
-          <template v-for="(hop, i) in m.path" :key="hop.ip">
-            <span v-if="i" class="mac-path-arrow">→</span>
-            <span class="mac-hop" :class="'mac-role-' + hop.role">{{ hop.name }}<small v-if="hop.uplinkPort">:{{ hop.uplinkPort }}</small></span>
-          </template>
-        </div>
-        <div v-if="macResult.errors.length" class="muted" style="font-size:11px;margin-top:8px">部分设备查询失败：{{ macResult.errors.map((e) => e.deviceIp || '-').join('、') }}</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">MAC {{ macResult.mac }} · 已检查 {{ macResult.checked }} 台设备 · 命中 {{ macResult.matches?.length || 0 }} 处</div>
+        <template v-for="m in macResult.matches" :key="m.deviceIp">
+          <div class="mac-match">
+            <span class="status-dot status-online" />
+            <b>{{ m.deviceName || m.deviceIp }}</b>
+            <span class="mono muted">{{ m.deviceIp }}</span>
+            <el-tag size="small" effect="dark" type="success">端口 {{ m.port }}</el-tag>
+            <span class="muted" style="font-size:11px">{{ m.source === 'dot1q' ? 'VLAN FDB' : 'FDB' }} · ifIndex {{ m.ifIndex }}</span>
+            <el-button link type="primary" size="small" @click="openMacDevice(m.deviceIp)">设备详情</el-button>
+            <el-button link type="primary" size="small" @click="locateOnTopology(m.deviceIp)">拓扑定位</el-button>
+          </div>
+          <div v-if="m.path?.length > 1" class="mac-path">
+            <span class="muted" style="font-size:11px">上行路径：</span>
+            <template v-for="(hop, i) in m.path" :key="hop.ip">
+              <span v-if="i" class="mac-path-arrow">→</span>
+              <span class="mac-hop" :class="'mac-role-' + hop.role">{{ hop.name }}<small v-if="hop.uplinkPort">:{{ hop.uplinkPort }}</small></span>
+            </template>
+          </div>
+        </template>
+        <div v-if="macResult.errors?.length" class="muted" style="font-size:11px;margin-top:8px">部分设备查询失败：{{ macResult.errors.map((e) => e.deviceIp || '-').join('、') }}</div>
       </div>
     </div>
 
