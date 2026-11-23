@@ -76,43 +76,17 @@ G6.registerNode('h3c-device', {
   }
 }, 'single-node');
 
-// 双向数据流边：整条链路一股流动虚线 + 相向运动的数据包粒子
+// 流动虚线边：对边自身虚线做 lineDashOffset 循环滚动（G6 标准流动写法）
 G6.registerEdge('h3c-flow-edge', {
   afterDraw(cfg, group) {
     if (cfg.status === 'down') return;
-    const keyShape = this.getKeyShape?.() || group.get('children')[0];
-    if (!keyShape || typeof keyShape.getPoint !== 'function') return;
-    // 整线仅一股流动虚线，避免两股叠加杂乱
-    const flow = group.addShape('path', {
-      attrs: {
-        path: keyShape.attr('path'),
-        stroke: '#4df0ff',
-        lineWidth: 2,
-        lineDash: [10, 14],
-        lineDashOffset: 0,
-        opacity: 0.9,
-        shadowColor: '#4df0ff',
-        shadowBlur: 6
-      },
-      name: 'flow-line',
-      draggable: false
-    });
-    flow.animate((ratio) => ({ lineDashOffset: -ratio * 48 }), {
-      repeat: true, duration: 2200, easing: 'linear'
-    });
-    // 相向运动的数据包粒子体现双向传输
-    ['#4df0ff', '#ffd166'].forEach((color, index) => {
-      const dot = group.addShape('circle', {
-        attrs: { x: 0, y: 0, r: 3.2, fill: color, shadowColor: color, shadowBlur: 10, opacity: 0.95 },
-        name: `flow-dot-${index}`,
-        draggable: false
-      });
-      dot.animate((ratio) => {
-        const t = index === 0 ? ratio : 1 - ratio;
-        const p = keyShape.getPoint(t);
-        return p ? { x: p.x, y: p.y } : {};
-      }, { repeat: true, duration: 2200, easing: 'linear' });
-    });
+    const shape = this.getKeyShape?.() || group.get('children')[0];
+    if (!shape) return;
+    let step = 0;
+    shape.animate(() => {
+      step = (step + 1) % 16;
+      return { lineDashOffset: -step };
+    }, { repeat: true, duration: 1400 });
   }
 }, 'line');
 
@@ -131,20 +105,23 @@ function nodeStyle(n) {
 }
 
 function toG6Data(data) {
+  const nodeIps = new Set(data.nodes.map((n) => n.ip));
   return {
     nodes: data.nodes.map((n) => ({ ...n, type: 'h3c-device', size: n.size, style: nodeStyle(n) })),
-    edges: data.edges.map((e) => ({
-      ...e,
-      type: 'h3c-flow-edge',
-      label: showLabels.value ? e.label : '',
-      style: {
-        stroke: e.status === 'down' ? '#ff4d5e' : '#2b4d78',
-        lineWidth: e.status === 'down' ? 2.2 : 3,
-        lineDash: e.status === 'down' ? [6, 4] : undefined,
-        opacity: e.status === 'down' ? 0.95 : 0.5
-      },
-      labelCfg: { autoRotate: true, style: { fill: '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
-    }))
+    edges: data.edges
+      .filter((e) => nodeIps.has(e.source) && nodeIps.has(e.target))
+      .map((e) => ({
+        ...e,
+        type: 'h3c-flow-edge',
+        label: showLabels.value ? e.label : '',
+        style: {
+          stroke: e.status === 'down' ? '#ff4d5e' : '#3a7fd5',
+          lineWidth: e.status === 'down' ? 2.2 : 1.5,
+          lineDash: e.status === 'down' ? [6, 4] : [5, 5],
+          opacity: e.status === 'down' ? 0.95 : 0.75
+        },
+        labelCfg: { autoRotate: true, style: { fill: '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
+      }))
   };
 }
 
@@ -298,7 +275,7 @@ watch(() => store.seq, () => {
             <div class="legend-item"><span class="legend-dot" style="background:#64748b" />离线</div>
             <div class="legend-item"><span class="legend-line" />正常链路</div>
             <div class="legend-item"><span class="legend-line down" />中断链路</div>
-            <div class="legend-item"><span class="legend-flow">●⇄●</span>数据双向流动</div>
+            <div class="legend-item"><span class="legend-flow" style="border-top:1px dashed #3a7fd5">- -</span>链路数据流动</div>
           </div>
         </div>
       </div>
