@@ -15,78 +15,63 @@ export function typeColor(node) {
   return TYPE_COLORS.switchAccess;
 }
 
-export const TYPE_LABELS = {
-  switch: '交换机',
-  firewall: '防火墙',
-  router: '路由器',
-  server: '服务器'
-};
-
-function p(group, name, path, stroke, lineWidth) {
-  group.addShape('path', { attrs: { path, stroke, lineWidth, fill: 'transparent', lineCap: 'round', lineJoin: 'round' }, name });
+function kindOf(node) {
+  return node.deviceType || node.type || 'switch';
 }
 
-function line(group, name, x1, y1, x2, y2, stroke, lineWidth) {
-  group.addShape('line', { attrs: { x1, y1, x2, y2, stroke, lineWidth, lineCap: 'round' }, name });
-}
+const stroke = '#eaf4ff';
+const led = '#37e0a3';
 
-export function drawDeviceIcon(group, node, size, offline) {
-  const kind = node.deviceType || node.type || 'switch';
-  const s = size / 34;
-  const stroke = offline ? 'rgba(205,216,235,.62)' : 'rgba(255,255,255,.96)';
-  const soft = offline ? 'rgba(205,216,235,.36)' : 'rgba(255,255,255,.64)';
-  const lw = Math.max(1.2, 1.45 * s);
-
-  if (kind === 'switch') {
-    const w = size * 0.68;
-    const h = size * 0.36;
-    group.addShape('rect', { attrs: { x: -w / 2, y: -h / 2, width: w, height: h, radius: 2 * s, stroke, lineWidth: lw, fill: 'transparent' }, name: 'icon-chassis' });
-    const ports = 5;
-    for (let i = 0; i < ports; i++) {
-      const px = -w / 2 + (i + 1) * w / (ports + 1);
-      group.addShape('rect', { attrs: { x: px - 1.05 * s, y: -h * 0.28, width: 2.1 * s, height: h * 0.33, fill: soft, radius: 0.6 * s }, name: `icon-port-${i}` });
+function switchSvg(color) {
+  const ports = [];
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 8; col++) {
+      ports.push(`<rect x="${11 + col * 5.4}" y="${31 + row * 7}" width="4" height="4.4" rx="0.8" fill="${stroke}" opacity="0.92"/>`);
     }
-    line(group, 'icon-rail', -w / 2 + 2 * s, h * 0.24, w / 2 - 2 * s, h * 0.24, soft, lw * 0.8);
-    group.addShape('circle', { attrs: { x: w / 2 - 3.4 * s, y: h * 0.24, r: 1.05 * s, fill: offline ? soft : '#20c997' }, name: 'icon-led' });
-    return;
   }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <rect x="5" y="19" width="54" height="28" rx="3.5" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="2.6"/>
+    <rect x="5" y="19" width="54" height="6" rx="3.5" fill="${color}" fill-opacity="0.55"/>
+    ${ports.join('')}
+    <circle cx="54.5" cy="22.2" r="1.7" fill="${led}"/>
+    <circle cx="49" cy="22.2" r="1.2" fill="${stroke}" opacity="0.7"/>
+  </svg>`;
+}
 
-  if (kind === 'router') {
-    const r = size * 0.3;
-    group.addShape('circle', { attrs: { x: 0, y: 0, r, stroke, lineWidth: lw, fill: 'transparent' }, name: 'icon-ring' });
-    const a = r * 0.58;
-    const t = r * 0.26;
-    p(group, 'icon-arrow-ne', [
-      ['M', -a, a], ['L', a, -a],
-      ['M', a - t, -a], ['L', a, -a], ['L', a, -a + t]
-    ], stroke, lw);
-    p(group, 'icon-arrow-sw', [
-      ['M', -a, -a], ['L', a, a],
-      ['M', a - t, a], ['L', a, a], ['L', a, a - t]
-    ], soft, lw);
-    return;
-  }
+function routerSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="23" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="2.6"/>
+    <circle cx="32" cy="32" r="17.5" fill="none" stroke="${stroke}" stroke-width="1" opacity="0.28"/>
+    <path d="M18 46 L46 18 M18 18 L46 46" stroke="${stroke}" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M37 18 H46 V27 M37 46 H46 V37 M27 18 H18 V27 M27 46 H18 V37" fill="none" stroke="${stroke}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
 
-  if (kind === 'firewall') {
-    const w = size * 0.64;
-    const h = size * 0.46;
-    group.addShape('rect', { attrs: { x: -w / 2, y: -h / 2, width: w, height: h, radius: 2 * s, stroke, lineWidth: lw, fill: 'transparent' }, name: 'icon-frame' });
-    p(group, 'icon-brick-lines', [
-      ['M', -w / 2, -h / 6], ['L', w / 2, -h / 6],
-      ['M', -w / 2, h / 6], ['L', w / 2, h / 6]
-    ], soft, lw * 0.8);
-    line(group, 'brick-a', -w / 6, -h / 2, -w / 6, -h / 6, soft, lw * 0.8);
-    line(group, 'brick-b', w / 6, -h / 6, w / 6, h / 6, soft, lw * 0.8);
-    line(group, 'brick-c', -w / 6, h / 6, -w / 6, h / 2, soft, lw * 0.8);
-    return;
-  }
+function firewallSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <rect x="7" y="16" width="50" height="32" rx="3.5" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="2.6"/>
+    <path d="M7 26.7 H57 M7 37.3 H57 M23.7 16 V26.7 M40.3 26.7 V37.3 M23.7 37.3 V48" fill="none" stroke="${stroke}" stroke-width="2.1" opacity="0.88"/>
+    <rect x="10.5" y="19" width="8" height="4" rx="0.8" fill="${stroke}" opacity="0.45"/>
+  </svg>`;
+}
 
-  const w = size * 0.46;
-  const h = size * 0.62;
-  group.addShape('rect', { attrs: { x: -w / 2, y: -h / 2, width: w, height: h, radius: 2 * s, stroke, lineWidth: lw, fill: 'transparent' }, name: 'icon-rack' });
-  for (let i = 0; i < 3; i++) {
-    const y = -h / 2 + h * (i + 1) / 4;
-    line(group, `icon-shelf-${i}`, -w / 2 + 2 * s, y, w / 2 - 2 * s, y, soft, lw * 0.85);
-    group.addShape('circle', { attrs: { x: w / 2 - 4 * s, y: y - h * 0.11, r: 0.95 * s, fill: offline ? soft : '#20c997' }, name: `icon-led-${i}` });
-  }
+function serverSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <rect x="16" y="7" width="32" height="50" rx="3.5" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="2.6"/>
+    <path d="M16 20.7 H48 M16 33.3 H48 M16 46 H48" fill="none" stroke="${stroke}" stroke-width="2" opacity="0.85"/>
+    <circle cx="42" cy="13.5" r="1.9" fill="${led}"/>
+    <circle cx="42" cy="26.7" r="1.9" fill="${led}"/>
+    <circle cx="42" cy="39.3" r="1.9" fill="${led}"/>
+    <rect x="20.5" y="10.5" width="13" height="5" rx="1" fill="${stroke}" opacity="0.4"/>
+  </svg>`;
+}
+
+export function deviceIconUri(node) {
+  const color = typeColor(node);
+  const kind = kindOf(node);
+  const svg = kind === 'firewall' ? firewallSvg(color)
+    : kind === 'router' ? routerSvg(color)
+      : kind === 'server' ? serverSvg(color)
+        : switchSvg(color);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

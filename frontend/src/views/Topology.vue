@@ -5,7 +5,7 @@ import * as echarts from 'echarts';
 import { Refresh, RefreshRight, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue';
 import { api } from '../api.js';
 import { store } from '../store.js';
-import { drawDeviceIcon, typeColor, TYPE_COLORS } from '../device-icons.js';
+import { deviceIconUri, typeColor, TYPE_COLORS } from '../device-icons.js';
 
 const legendItems = [
   { label: '核心交换机', color: TYPE_COLORS.switchCore },
@@ -50,17 +50,26 @@ const filteredDevices = computed(() => {
 G6.registerNode('h3c-device', {
   draw(cfg, group) {
     const size = cfg.size || 32;
+    const alertColor = cfg.status === 'critical' ? '#ff4d5e' : cfg.status === 'warning' ? '#ffb020' : null;
+    if (alertColor) {
+      group.addShape('circle', {
+        attrs: { x: 0, y: 0, r: size * 0.74, stroke: alertColor, lineWidth: 2.6, lineDash: [5, 4], shadowColor: alertColor, shadowBlur: 16 },
+        name: 'alert-ring'
+      });
+    }
     const keyShape = group.addShape('rect', {
-      attrs: {
-        x: -size / 2, y: -size / 2, width: size, height: size, radius: 7,
-        ...cfg.style
-      },
+      attrs: { x: -size / 2, y: -size / 2, width: size, height: size, radius: 7, fill: 'transparent', stroke: 'transparent' },
       name: 'device-box',
       draggable: true
     });
-    drawDeviceIcon(group, cfg, size, cfg.status === 'offline');
+    const iconSize = size * 1.22;
+    group.addShape('image', {
+      attrs: { x: -iconSize / 2, y: -iconSize / 2, width: iconSize, height: iconSize, img: deviceIconUri(cfg) },
+      name: 'device-icon',
+      draggable: true
+    });
     group.addShape('text', {
-      attrs: { text: cfg.label, x: 0, y: size / 2 + 15, fill: '#e6f0ff', fontSize: 11, fontWeight: 500, textAlign: 'center', textBaseline: 'middle' },
+      attrs: { text: cfg.label, x: 0, y: size / 2 + 16, fill: '#e6f0ff', fontSize: 11, fontWeight: 500, textAlign: 'center', textBaseline: 'middle', shadowColor: '#000', shadowBlur: 5 },
       name: 'device-label'
     });
     return keyShape;
@@ -143,12 +152,8 @@ async function loadData(resetLayout = false) {
     const [topo, dev] = await Promise.all([api.topology(), api.devices()]);
     topology.value = topo;
     devices.value = dev;
-    if (resetLayout || !graph.value) {
-      await nextTick();
-      initGraph();
-    } else {
-      graph.value.changeData(toG6Data(topo));
-    }
+    await nextTick();
+    initGraph();
     if (selectedIp.value) await selectNode(selectedIp.value, true);
   } finally {
     loading.value = false;

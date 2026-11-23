@@ -5,7 +5,7 @@ import G6 from '@antv/g6';
 import * as echarts from 'echarts';
 import { api } from '../api.js';
 import { store } from '../store.js';
-import { drawDeviceIcon, typeColor, TYPE_COLORS } from '../device-icons.js';
+import { deviceIconUri, typeColor, TYPE_COLORS } from '../device-icons.js';
 
 const router = useRouter();
 const legendItems = [
@@ -50,26 +50,21 @@ const ticker = computed(() => {
 G6.registerNode('h3c-screen-node', {
   draw(cfg, group) {
     const size = cfg.size || 32;
-    const color = typeColor(cfg);
-    const offline = cfg.status === 'offline';
-    const alert = cfg.status === 'critical' || cfg.status === 'warning';
-    const alertColor = cfg.status === 'critical' ? '#ff4d5e' : '#ffb020';
-
-    if (alert) {
-      group.addShape('circle', { attrs: { x: 0, y: 0, r: size / 2 + 10, stroke: alertColor, lineWidth: 2, lineDash: [5, 4], shadowColor: alertColor, shadowBlur: 16 }, name: 'ring' });
+    const alertColor = cfg.status === 'critical' ? '#ff4d5e' : cfg.status === 'warning' ? '#ffb020' : null;
+    if (alertColor) {
+      group.addShape('circle', { attrs: { x: 0, y: 0, r: size * 0.76, stroke: alertColor, lineWidth: 2.8, lineDash: [5, 4], shadowColor: alertColor, shadowBlur: 18 }, name: 'ring' });
     }
     const keyShape = group.addShape('rect', {
-      attrs: {
-        x: -size / 2, y: -size / 2, width: size, height: size, radius: 8,
-        fill: offline ? '#3d475d' : color, fillOpacity: offline ? 0.5 : 0.9,
-        stroke: offline ? '#7b879c' : 'rgba(255,255,255,.7)', lineWidth: 1.4,
-        shadowColor: offline ? '#64748b' : color, shadowBlur: offline ? 4 : 24
-      },
+      attrs: { x: -size / 2, y: -size / 2, width: size, height: size, radius: 8, fill: 'transparent', stroke: 'transparent' },
       name: 'box', draggable: true
     });
-    drawDeviceIcon(group, cfg, size, offline);
+    const iconSize = size * 1.24;
+    group.addShape('image', {
+      attrs: { x: -iconSize / 2, y: -iconSize / 2, width: iconSize, height: iconSize, img: deviceIconUri(cfg) },
+      name: 'device-icon', draggable: true
+    });
     group.addShape('text', {
-      attrs: { text: cfg.label, x: 0, y: size / 2 + 16, fill: offline ? '#8598b7' : '#e8f2ff', fontSize: 12, fontWeight: 600, textAlign: 'center', textBaseline: 'middle', shadowColor: '#000', shadowBlur: 6 },
+      attrs: { text: cfg.label, x: 0, y: size / 2 + 17, fill: '#e8f2ff', fontSize: 12, fontWeight: 600, textAlign: 'center', textBaseline: 'middle', shadowColor: '#000', shadowBlur: 7 },
       name: 'label'
     });
     return keyShape;
