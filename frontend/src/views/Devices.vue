@@ -149,7 +149,7 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
       </el-table>
     </div>
 
-    <el-drawer v-model="drawer" :title="detail?.hostname || '设备详情'" size="480px">
+    <el-drawer v-model="drawer" :title="detail?.hostname || '设备详情'" size="min(1100px, 94vw)" class="device-drawer">
       <template v-if="detail">
         <div class="drawer-meta">
           <div><span>管理 IP</span><b class="mono">{{ detail.ip }}</b></div>
@@ -161,27 +161,27 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         </div>
         <div class="drawer-section">
           <div class="drawer-title">端口状态 <span class="muted">({{ detail.interfaces?.length || 0 }})</span></div>
-          <el-table :data="detail.interfaces || []" size="small" max-height="260">
-            <el-table-column prop="if_name" label="端口" width="110" class-name="mono" />
-            <el-table-column label="状态" width="76"><template #default="{ row }"><span class="status-dot" :class="row.oper_status === 1 ? 'status-online' : 'status-offline'" />{{ row.oper_status === 1 ? 'UP' : 'DOWN' }}</template></el-table-column>
-            <el-table-column prop="if_speed" label="速率"><template #default="{ row }">{{ row.if_speed >= 1e9 ? (row.if_speed / 1e9) + ' Gbps' : (row.if_speed / 1e6) + ' Mbps' }}</template></el-table-column>
-            <el-table-column label="入/出利用率"><template #default="{ row }">{{ (row.in_util || 0).toFixed(1) }}% / {{ (row.out_util || 0).toFixed(1) }}%</template></el-table-column>
+          <el-table :data="detail.interfaces || []" size="small" max-height="260" class="nowrap-table">
+            <el-table-column prop="if_name" label="端口" min-width="180" class-name="mono" />
+            <el-table-column label="状态" width="90"><template #default="{ row }"><span class="status-dot" :class="row.oper_status === 1 ? 'status-online' : 'status-offline'" />{{ row.oper_status === 1 ? 'UP' : 'DOWN' }}</template></el-table-column>
+            <el-table-column prop="if_speed" label="速率" min-width="120"><template #default="{ row }">{{ row.if_speed >= 1e9 ? (row.if_speed / 1e9) + ' Gbps' : (row.if_speed / 1e6) + ' Mbps' }}</template></el-table-column>
+            <el-table-column label="入/出利用率" min-width="160"><template #default="{ row }">{{ (row.in_util || 0).toFixed(1) }}% / {{ (row.out_util || 0).toFixed(1) }}%</template></el-table-column>
           </el-table>
         </div>
         <div class="drawer-section">
           <div class="drawer-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
           <div v-if="!detail.links?.length" class="muted" style="font-size:12px">暂无链路数据</div>
-          <el-table v-else :data="detail.links || []" size="small" max-height="300">
-            <el-table-column label="对端设备" min-width="130">
+          <el-table v-else :data="detail.links || []" size="small" max-height="300" class="nowrap-table">
+            <el-table-column label="对端设备" min-width="180">
               <template #default="{ row }">
                 <span class="status-dot" :class="row.status === 'up' ? 'status-online' : row.status === 'down' ? 'status-offline' : ''" />
                 <b>{{ row.peerName || row.peerIp || '未知设备' }}</b>
               </template>
             </el-table-column>
-            <el-table-column label="对端 IP" width="130" class-name="mono"><template #default="{ row }">{{ row.peerIp || '-' }}</template></el-table-column>
-            <el-table-column label="本端端口" min-width="140" class-name="mono"><template #default="{ row }">{{ row.localPort || '-' }}</template></el-table-column>
-            <el-table-column label="对端端口" min-width="140" class-name="mono"><template #default="{ row }">{{ row.remotePort || '-' }}</template></el-table-column>
-            <el-table-column label="状态" width="80"><template #default="{ row }">{{ row.status === 'up' ? '正常' : row.status === 'down' ? '中断' : '未知' }}</template></el-table-column>
+            <el-table-column label="对端 IP" width="150" class-name="mono"><template #default="{ row }">{{ row.peerIp || '-' }}</template></el-table-column>
+            <el-table-column label="本端端口" min-width="200" class-name="mono"><template #default="{ row }">{{ row.localPort || '-' }}</template></el-table-column>
+            <el-table-column label="对端端口" min-width="200" class-name="mono"><template #default="{ row }">{{ row.remotePort || '-' }}</template></el-table-column>
+            <el-table-column label="状态" width="90"><template #default="{ row }">{{ row.status === 'up' ? '正常' : row.status === 'down' ? '中断' : '未知' }}</template></el-table-column>
           </el-table>
         </div>
         <div class="drawer-section">
@@ -238,10 +238,15 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .drawer-meta { display: grid; gap: 9px; font-size: 12px; padding-bottom: 12px; }
 .drawer-meta > div { display: flex; justify-content: space-between; gap: 14px; }
 .drawer-meta span { color: var(--muted); flex: 0 0 76px; }
-.drawer-meta b { font-weight: 500; text-align: right; }
+.drawer-meta b { font-weight: 500; text-align: right; white-space: nowrap; overflow: visible; text-overflow: clip; }
 .drawer-section { margin-top: 16px; }
 .drawer-title { font-size: 13px; font-weight: 600; margin-bottom: 9px; color: #cfe0ff; }
 .config-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
 .config-text { max-height: 60vh; overflow: auto; background: #080e1c; color: #9fd0ff; font-size: 11px; line-height: 1.5; padding: 14px; border-radius: 6px; }
 .cred-divider { font-size: 12px; color: #cfe0ff; font-weight: 600; margin: 6px 0 12px 96px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* 抽屉内容：不换行、不裁剪、不遮盖；超宽时横向滚动兜底 */
+:deep(.device-drawer) .el-drawer__body { overflow-x: auto; }
+:deep(.nowrap-table) .el-table__cell .cell { white-space: nowrap; overflow: visible; text-overflow: clip; }
+:deep(.nowrap-table) { width: max-content; min-width: 100%; }
 </style>
