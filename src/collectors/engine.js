@@ -1,4 +1,4 @@
-import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries } from '../db.js';
+import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries, listMacEntries } from '../db.js';
 import { collectSnmp, normalizeMac, lookupMacOnDevice, collectMacTable } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
@@ -113,8 +113,32 @@ export async function collectAllMacTables(config) {
 }
 
 export async function lookupMac(config, macInput) {
-  const mac = normalizeMac(macInput);
-  if (!mac) throw new Error('MAC 地址格式无效，需 12 位十六进制字符');
+  const raw = String(macInput ?? '').trim();
+  const hex = raw.toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (!hex || hex.length < 2 || hex.length > 12 || hex.length % 2 !== 0) {
+    throw new Error('MAC 地址格式无效，请输入偶数位十六进制（如 46:47 或 46:47:0a:1b:2c:3d）');
+  }
+  if (hex.length < 12) {
+    const rows = listMacEntries({ mac: hex, limit: 200 });
+    const matches = rows.map((r) => {
+      const pathInfo = getPathFromDevice(r.device_ip);
+      return {
+        mac: r.mac,
+        deviceIp: r.device_ip,
+        deviceName: r.device_name,
+        port: r.port,
+        ifIndex: r.if_index,
+        vlan: r.vlan,
+        source: r.source,
+        found: true,
+        ok: true,
+        fragment: true,
+        path: pathInfo.path || []
+      };
+    });
+    return { mac: raw, mode: 'fragment', matches, checked: rows.length, errors: [] };
+  }
+  const mac = normalizeMac(raw);
   const targets = config.devices.filter((d) => d.enabled !== false);
   const results = await Promise.allSettled(targets.map(async (device) => {
     try {

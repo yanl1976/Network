@@ -41,7 +41,7 @@ async function doMacLookup() {
   macLoading.value = true;
   try {
     macResult.value = await api.macLookup(macQuery.value.trim());
-    if (!macResult.value.matches?.length) ElMessage.info(`已检查 ${macResult.value.checked} 台设备，未找到该 MAC`);
+    if (!macResult.value.matches?.length) ElMessage.info(macResult.value.mode === 'fragment' ? `没有匹配片段 ${macResult.value.mac} 的 MAC 明细` : `已检查 ${macResult.value.checked} 台设备，未找到该 MAC`);
   } catch (error) { ElMessage.error(error.message); macResult.value = null; }
   finally { macLoading.value = false; }
 }
@@ -84,16 +84,18 @@ onMounted(loadEntries);
     <div class="panel">
       <div class="panel-title">MAC 一键定位 <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">输入终端 MAC，反查接入交换机/端口及上行路径</span></div>
       <div class="tool-bar">
-        <el-input v-model="macQuery" size="small" placeholder="如 00:11:22:33:44:55 或 0011.2233.4455" style="width:340px" clearable @keyup.enter="doMacLookup" />
+        <el-input v-model="macQuery" size="small" placeholder="完整 MAC 或任意片段，如 46:47 / 00:11:22:33:44:55" style="width:360px" clearable @keyup.enter="doMacLookup" />
         <el-button size="small" type="primary" :loading="macLoading" @click="doMacLookup">定位</el-button>
       </div>
       <div v-if="macResult" class="tool-body">
-        <div class="muted" style="font-size:12px;margin-bottom:8px">MAC {{ macResult.mac }} · 检查 {{ macResult.checked }} 台 · 命中 {{ macResult.matches?.length || 0 }} 处</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">MAC {{ macResult.mac }} · {{ macResult.mode === 'fragment' ? '片段匹配（任意位置）' : `检查 ${macResult.checked} 台` }} · 命中 {{ macResult.matches?.length || 0 }} 处</div>
         <template v-for="m in macResult.matches" :key="m.deviceIp">
           <div class="match-row">
             <b>{{ m.deviceName || m.deviceIp }}</b><span class="mono muted">{{ m.deviceIp }}</span>
             <el-tag size="small" type="success" effect="dark">端口 {{ m.port }}</el-tag>
+            <span class="muted mono" style="font-size:11px">{{ m.mac || macResult.mac }}</span>
             <span class="muted" style="font-size:11px">{{ m.source }}</span>
+            <el-button v-if="m.fragment && m.mac" link type="primary" size="small" @click="showOnly(m.mac)">精确定位</el-button>
             <el-button link type="primary" size="small" @click="locateOnTopology(m.deviceIp)">拓扑定位</el-button>
           </div>
           <div v-if="m.path?.length > 1" class="path-row">
