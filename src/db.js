@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS metrics (
   FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS topology_layouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  positions TEXT NOT NULL,
+  active INTEGER DEFAULT 0,
+  created_at TEXT,
+  updated_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_interfaces_device ON interfaces(device_id);
 CREATE INDEX IF NOT EXISTS idx_links_local ON links(local_device_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(active, created_at);
@@ -162,6 +171,46 @@ export function raiseAlert({ deviceId, deviceIp, severity, type, message, value 
 
 export function resolveAlert(type, deviceId) {
   db.prepare('UPDATE alerts SET active=0, resolved_at=? WHERE device_id=? AND type=? AND active=1').run(now(), deviceId, type);
+}
+
+const parsePositions = (row) => row ? { ...row, positions: JSON.parse(row.positions || '{}') } : null;
+
+export function listLayouts() {
+  return db.prepare('SELECT * FROM topology_layouts ORDER BY active DESC, updated_at DESC').all().map(parsePositions);
+}
+
+export function getActiveLayout() {
+  return parsePositions(db.prepare('SELECT * FROM topology_layouts WHERE active=1 ORDER BY updated_at DESC LIMIT 1').get());
+}
+
+export function saveLayout(name, positions) {
+  const ts = now();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanName) throw new Error('布局名称不能为空');
+  const existing = db.prepare('SELECT id FROM topology_layouts WHERE name=?').get(cleanName);
+  const json = JSON.stringify(positions && typeof positions === 'object' ? positions : {});
+  if (existing) {
+    db.prepare('UPDATE topology_layouts SET positions=?, updated_at=? WHERE id=?').run(json, ts, existing.id);
+    return parsePositions(db.prepare('SELECT * FROM topology_layouts WHERE id=?').get(existing.id));
+  }
+  const active = db.prepare('SELECT COUNT(*) n FROM topology_layouts').get().n === 0 ? 1 : 0;
+  const result = db.prepare('INSERT INTO topology_layouts (name, positions, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .run(cleanName, json, active, ts, ts);
+  return parsePositions(db.prepare('SELECT * FROM topology_layouts WHERE id=?').get(Number(result.lastInsertRowid)));
+}
+
+export function deleteLayout(id) {
+  return db.prepare('DELETE FROM topology_layouts WHERE id=?').run(Number(id)).changes > 0;
+}
+
+export function activateLayout(id) {
+  const row = db.prepare('SELECT * FROM topology_layouts WHERE id=?').get(Number(id));
+  if (!row) throw new Error('布局版本不存在');
+  db.transaction(() => {
+    db.prepare('UPDATE topology_layouts SET active=0').run();
+    db.prepare('UPDATE topology_layouts SET active=1, updated_at=? WHERE id=?').run(now(), Number(id));
+  })();
+  return parsePositions(db.prepare('SELECT * FROM topology_layouts WHERE id=?').get(Number(id)));
 }
 
 export function clearAllData() {

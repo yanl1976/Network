@@ -6,6 +6,9 @@ import * as echarts from 'echarts';
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { deviceIconUri, typeColor, TYPE_COLORS } from '../device-icons.js';
+import { registerFlowEdge, FLOW_EDGE_STYLE } from '../flow-edge.js';
+
+registerFlowEdge();
 
 const router = useRouter();
 const legendItems = [
@@ -26,6 +29,7 @@ const overview = ref({});
 const devices = ref([]);
 const alerts = ref([]);
 const topology = ref({ nodes: [], edges: [] });
+const activeLayout = ref(null);
 const now = ref(new Date());
 const isFullscreen = ref(false);
 let timer = null;
@@ -74,13 +78,24 @@ G6.registerNode('h3c-screen-node', {
 function buildGraph() {
   if (!graphRef.value) return;
   graph.value?.destroy();
+  const nodeIps = new Set(topology.value.nodes.map((n) => n.ip));
+  const pos = activeLayout.value?.positions;
+  const preset = pos && typeof pos === 'object' && Object.keys(pos).length ? pos : null;
+  const nodes = topology.value.nodes.map((n) => ({
+    ...n, type: 'h3c-screen-node', ...(preset?.[n.ip] || {})
+  }));
+  const edges = topology.value.edges
+    .filter((e) => nodeIps.has(e.source) && nodeIps.has(e.target))
+    .map((e) => ({
+      ...e, type: 'h3c-flow-edge', style: FLOW_EDGE_STYLE(e.status)
+    }));
   const g = new G6.Graph({
     container: graphRef.value,
     width: graphRef.value.clientWidth,
     height: graphRef.value.clientHeight,
     fitView: true,
     fitViewPadding: [50, 40, 50, 40],
-    layout: {
+    layout: preset ? undefined : {
       type: 'force', preventOverlap: true,
       nodeSize: (d) => d.size + 34,
       linkDistance: (d) => d.bandwidth === '10G' ? 125 : 170,
@@ -91,13 +106,7 @@ function buildGraph() {
     animate: true,
     animateCfg: { duration: 350 }
   });
-  g.data({
-    nodes: topology.value.nodes.map((n) => ({ ...n, type: 'h3c-screen-node' })),
-    edges: topology.value.edges.map((e) => ({
-      ...e, type: 'line',
-      style: { stroke: e.status === 'down' ? '#ff4d5e' : '#3f8fe6', lineWidth: e.status === 'down' ? 2.4 : 1.5, lineDash: e.status === 'down' ? [6, 4] : [5, 5], opacity: 0.75, shadowColor: '#2f8fff', shadowBlur: 6 }
-    }))
-  });
+  g.data({ nodes, edges });
   g.render();
   graph.value = g;
 }
@@ -122,11 +131,12 @@ function buildPie() {
 }
 
 async function load() {
-  const [ov, topo, dev, al] = await Promise.all([api.overview(), api.topology(), api.devices(), api.alerts(true)]);
+  const [ov, topo, dev, al, active] = await Promise.all([api.overview(), api.topology(), api.devices(), api.alerts(true), api.activeLayout()]);
   overview.value = ov;
   topology.value = topo;
   devices.value = dev;
   alerts.value = al;
+  activeLayout.value = active || null;
   await nextTick();
   buildGraph();
   buildPie();
@@ -227,6 +237,7 @@ watch(() => store.seq, () => {
             <span v-for="item in legendItems" :key="item.label"><i :style="{ background: item.color }" />{{ item.label }}</span>
             <span><i style="background:#ff4d5e" />告警</span>
             <span><i style="background:#64748b" />离线</span>
+            <span><i style="background:transparent;border-top:1px dashed #3a7fd5;height:0;border-radius:0" />链路数据流动</span>
           </div>
         </div>
         <div ref="graphRef" class="screen-graph" />

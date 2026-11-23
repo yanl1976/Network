@@ -1,6 +1,6 @@
 import express from 'express';
 import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice, updateDevice, removeDevice } from '../config.js';
-import { db } from '../db.js';
+import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout } from '../db.js';
 import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
@@ -43,6 +43,17 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
     return data ? ok(res, data) : fail(res, '设备不存在', 404);
   });
   router.get('/topology', (_req, res) => ok(res, getTopology()));
+  router.get('/layouts', (_req, res) => ok(res, listLayouts()));
+  router.get('/layouts/active', (_req, res) => ok(res, getActiveLayout()));
+  router.post('/layouts', (req, res) => {
+    try { return ok(res, saveLayout(req.body?.name, req.body?.positions)); }
+    catch (error) { return fail(res, error.message); }
+  });
+  router.post('/layouts/:id/activate', (req, res) => {
+    try { return ok(res, activateLayout(Number(req.params.id))); }
+    catch (error) { return fail(res, error.message); }
+  });
+  router.delete('/layouts/:id', (req, res) => ok(res, { deleted: deleteLayout(Number(req.params.id)) }));
   router.get('/alerts', (req, res) => ok(res, getAlerts(req.query.active === '1')));
   router.post('/alerts/:id/resolve', (req, res) => {
     db.prepare('UPDATE alerts SET active=0, resolved_at=? WHERE id=?').run(new Date().toISOString(), Number(req.params.id));

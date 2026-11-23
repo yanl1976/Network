@@ -6,6 +6,10 @@ import { Refresh, RefreshRight, ZoomIn, ZoomOut, FullScreen, Search } from '@ele
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { deviceIconUri, typeColor, TYPE_COLORS } from '../device-icons.js';
+import { registerFlowEdge, FLOW_EDGE_STYLE } from '../flow-edge.js';
+import { ElMessage, ElMessageBox } from 'element-plus';
+
+registerFlowEdge();
 
 const legendItems = [
   { label: '核心交换机', color: TYPE_COLORS.switchCore },
@@ -28,6 +32,10 @@ const detail = ref(null);
 const showLabels = ref(true);
 const loading = ref(false);
 const searchText = ref('');
+const layouts = ref([]);
+const activeLayout = ref(null);
+const layoutDialog = ref(false);
+const layoutName = ref('');
 let chart = null;
 let resizeObserver = null;
 
@@ -76,20 +84,6 @@ G6.registerNode('h3c-device', {
   }
 }, 'single-node');
 
-// 流动虚线边：对边自身虚线做 lineDashOffset 循环滚动（G6 标准流动写法）
-G6.registerEdge('h3c-flow-edge', {
-  afterDraw(cfg, group) {
-    if (cfg.status === 'down') return;
-    const shape = this.getKeyShape?.() || group.get('children')[0];
-    if (!shape) return;
-    let step = 0;
-    shape.animate(() => {
-      step = (step + 1) % 16;
-      return { lineDashOffset: -step };
-    }, { repeat: true, duration: 1400 });
-  }
-}, 'line');
-
 function nodeStyle(n) {
   const color = typeColor(n);
   const offline = n.status === 'offline';
@@ -114,12 +108,7 @@ function toG6Data(data) {
         ...e,
         type: 'h3c-flow-edge',
         label: showLabels.value ? e.label : '',
-        style: {
-          stroke: e.status === 'down' ? '#ff4d5e' : '#3a7fd5',
-          lineWidth: e.status === 'down' ? 2.2 : 1.5,
-          lineDash: e.status === 'down' ? [6, 4] : [5, 5],
-          opacity: e.status === 'down' ? 0.95 : 0.75
-        },
+        style: FLOW_EDGE_STYLE(e.status),
         labelCfg: { autoRotate: true, style: { fill: '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
       }))
   };
@@ -138,22 +127,32 @@ function layoutConfig() {
   };
 }
 
+function activePositions() {
+  const pos = activeLayout.value?.positions;
+  return pos && typeof pos === 'object' && Object.keys(pos).length ? pos : null;
+}
+
 function initGraph() {
   if (!containerRef.value) return;
   graph.value?.destroy();
   const width = containerRef.value.clientWidth;
   const height = containerRef.value.clientHeight;
+  const data = toG6Data(topology.value);
+  const preset = activePositions();
+  if (preset) {
+    data.nodes = data.nodes.map((n) => ({ ...n, ...(preset[n.ip] || {}) }));
+  }
   const g = new G6.Graph({
     container: containerRef.value,
     width, height,
     fitView: true,
     fitViewPadding: [46, 46, 46, 46],
-    layout: layoutConfig(),
+    layout: preset ? undefined : layoutConfig(),
     modes: { default: ['drag-canvas', 'zoom-canvas', 'drag-node'] },
     animate: true,
     animateCfg: { duration: 350, easing: 'easeCubic' }
   });
-  g.data(toG6Data(topology.value));
+  g.data(data);
   g.render();
   g.on('node:click', (evt) => {
     const model = evt.item.getModel();
@@ -166,9 +165,11 @@ function initGraph() {
 async function loadData(resetLayout = false) {
   loading.value = true;
   try {
-    const [topo, dev] = await Promise.all([api.topology(), api.devices()]);
+    const [topo, dev, layoutList, active] = await Promise.all([api.topology(), api.devices(), api.layouts(), api.activeLayout()]);
     topology.value = topo;
     devices.value = dev;
+    layouts.value = layoutList || [];
+    activeLayout.value = active || null;
     await nextTick();
     initGraph();
     if (selectedIp.value) await selectNode(selectedIp.value, true);
@@ -176,6 +177,45 @@ async function loadData(resetLayout = false) {
     loading.value = false;
   }
 }
+
+function currentPositions() {
+  const out = {};
+  graph.value?.getNodes().forEach((node) => {
+    const m = node.getModel();
+    if (m.ip && Number.isFinite(m.x) && Number.isFinite(m.y)) out[m.ip] = { x: m.x, y: m.y };
+  });
+  return out;
+}
+
+async function saveCurrentLayout() {
+  const name = layoutName.value.trim();
+  if (!name) { ElMessage.warning('请输入布局名称'); return; }
+  try {
+    await api.saveLayout(name, currentPositions());
+    layoutName.value = '';
+    ElMessage.success(`布局「${name}」已保存`);
+    await loadData(false);
+  } catch (error) { ElMessage.error(error.message); }
+}
+
+async function applyLayout(id) {
+  try {
+    await api.activateLayout(id);
+    ElMessage.success('布局已应用');
+    await loadData(false);
+  } catch (error) { ElMessage.error(error.message); }
+}
+
+async function removeLayout(id) {
+  try {
+    await ElMessageBox.confirm('确定删除该布局版本？', '删除布局', { type: 'warning' });
+    await api.deleteLayout(id);
+    ElMessage.success('已删除');
+    await loadData(false);
+  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message); }
+}
+
+function openLayoutDialog() { layoutDialog.value = true; }
 
 async function selectNode(ip, keep = false) {
   selectedIp.value = ip;
@@ -211,7 +251,16 @@ function zoom(ratio) {
   g.zoom(ratio, { x: g.getWidth() / 2, y: g.getHeight() / 2 });
 }
 function fit() { graph.value?.fitView(); }
-function relayout() { graph.value?.updateLayout(layoutConfig()); graph.value?.fitView(); }
+function relayout() {
+  if (activeLayout.value) {
+    activeLayout.value = null;
+    initGraph();
+    ElMessage.info('已切换为自动布局，可保存为新版本');
+  } else {
+    graph.value?.updateLayout(layoutConfig());
+    graph.value?.fitView();
+  }
+}
 function toggleLabels() { showLabels.value = !showLabels.value; loadData(true); }
 
 async function backupSelected() {
@@ -263,6 +312,7 @@ watch(() => store.seq, () => {
           <el-button size="small" :icon="ZoomOut" @click="zoom(0.8)">缩小</el-button>
           <el-button size="small" :icon="FullScreen" @click="fit">适应</el-button>
           <el-button size="small" @click="toggleLabels">{{ showLabels ? '隐藏' : '显示' }}标签</el-button>
+          <el-button size="small" type="primary" plain @click="openLayoutDialog">布局版本{{ activeLayout ? ` · ${activeLayout.name}` : '' }}</el-button>
           <el-input v-model="searchText" size="small" placeholder="搜索设备/IP" :prefix-icon="Search" style="width:170px;margin-left:auto" />
         </div>
         <div class="graph-area">
@@ -371,6 +421,23 @@ watch(() => store.seq, () => {
         </button>
       </div>
     </div>
+
+    <el-dialog v-model="layoutDialog" title="拓扑布局版本" width="520px">
+      <div class="layout-hint">保存当前设备排列为版本，切换后控制台与全屏展示均按该版本排布。点击「重排」可回到自动布局。</div>
+      <div class="layout-save">
+        <el-input v-model="layoutName" size="small" placeholder="输入版本名称，如 演示A-核心居中" @keyup.enter="saveCurrentLayout" />
+        <el-button size="small" type="primary" @click="saveCurrentLayout">保存当前排布</el-button>
+      </div>
+      <div class="layout-list">
+        <div v-if="!layouts.length" class="muted" style="font-size:12px;padding:14px 0">暂无保存的布局版本</div>
+        <div v-for="l in layouts" :key="l.id" class="layout-item" :class="{ active: activeLayout?.id === l.id }">
+          <span class="layout-name">{{ l.name }}</span>
+          <el-tag v-if="activeLayout?.id === l.id" size="small" type="success" effect="dark">使用中</el-tag>
+          <el-button link type="primary" size="small" :disabled="activeLayout?.id === l.id" @click="applyLayout(l.id)">应用</el-button>
+          <el-button link type="danger" size="small" @click="removeLayout(l.id)">删除</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -427,4 +494,10 @@ watch(() => store.seq, () => {
 .device-chip.active { border-color: var(--primary); background: rgba(47,143,255,.2); color: #fff; }
 .device-chip.offline { opacity: .55; }
 .chip-dot { width: 7px; height: 7px; border-radius: 2px; }
+.layout-hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+.layout-save { display: flex; gap: 8px; margin-bottom: 12px; }
+.layout-list { max-height: 320px; overflow: auto; border-top: 1px solid var(--border); }
+.layout-item { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.layout-item.active { background: rgba(47,143,255,.1); }
+.layout-name { flex: 1; color: #d6e4f7; }
 </style>
