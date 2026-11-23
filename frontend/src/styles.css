@@ -16,6 +16,12 @@
   --border-role: #ff9f43;
   --server: #8d9db6;
   color-scheme: dark;
+  --el-table-row-hover-bg-color: rgba(47, 143, 255, .16);
+  --el-table-current-row-bg-color: rgba(47, 143, 255, .2);
+  --el-fill-color-light: rgba(47, 143, 255, .12);
+  --el-fill-color-lighter: rgba(47, 143, 255, .08);
+  --el-bg-color-overlay: #14213a;
+  --el-text-color-regular: var(--text);
 }
 
 * { box-sizing: border-box; }
@@ -98,6 +104,8 @@ a { color: var(--primary); text-decoration: none; }
 .el-table__body tr:hover > td.el-table__cell { background: rgba(47, 143, 255, .16) !important; }
 .el-table__body tr.current-row > td.el-table__cell { background: rgba(47, 143, 255, .2) !important; }
 .el-table__inner-wrapper::before { display: none; }
+.el-select-dropdown__item:hover, .el-dropdown-menu__item:not(.is-disabled):hover,
+.el-table__body tr:hover > td, .el-table__row:hover > td { background: rgba(47, 143, 255, .16) !important; color: var(--text) !important; }
 .el-dialog, .el-drawer { --el-dialog-bg-color: #101b31; --el-drawer-bg-color: #101b31; background: #101b31; }
 .el-dialog__title, .el-drawer__title { color: #eaf2ff; }
 .el-form-item__label { color: #9fb4d6 !important; }
