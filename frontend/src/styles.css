@@ -135,8 +135,11 @@ a { color: var(--primary); text-decoration: none; }
   --el-color-danger: #ff4d5e;
   --el-color-error: #ff4d5e;
   --el-color-info: #7e96bd;
+}
 
-  /* 默认按钮：深蓝玻璃底 + 亮字，与面板/表格同色系 */
+/* 默认按钮变量必须挂在 .el-button 上：Element Plus 自身在该选择器定义了白底变量，
+   放在 :root 会被元素级定义覆盖（继承优先级低于自身定义） */
+.el-button {
   --el-button-font-weight: 600;
   --el-button-text-color: #dce9ff;
   --el-button-bg-color: rgba(30, 51, 85, .6);
@@ -150,14 +153,23 @@ a { color: var(--primary); text-decoration: none; }
   --el-button-disabled-text-color: #5b7093;
   --el-button-disabled-bg-color: rgba(20, 33, 58, .5);
   --el-button-disabled-border-color: #1e3355;
-}
-
-.el-button {
   border-radius: 6px;
   letter-spacing: .2px;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .1s ease;
 }
 .el-button:active { transform: translateY(1px); }
+
+/* 兜底：默认按钮直接写属性，避免个别版本把颜色硬编码导致变量不生效 */
+.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.is-plain):not(.is-link):not(.is-text) {
+  background-color: rgba(30, 51, 85, .6);
+  color: #dce9ff;
+  border-color: #35558a;
+}
+.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):hover {
+  background-color: rgba(47, 143, 255, .24);
+  color: #ffffff;
+  border-color: #3f8ff0;
+}
 
 /* 主按钮：品牌蓝 */
 .el-button--primary {
