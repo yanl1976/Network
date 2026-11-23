@@ -76,6 +76,28 @@ G6.registerNode('h3c-device', {
   }
 }, 'single-node');
 
+// 双向数据流边：沿链路相向运动的两个发光粒子，中断链路不显示流动
+G6.registerEdge('h3c-flow-edge', {
+  afterDraw(cfg, group) {
+    if (cfg.status === 'down') return;
+    const keyShape = this.getKeyShape?.() || group.get('children')[0];
+    if (!keyShape || typeof keyShape.getPoint !== 'function') return;
+    const colors = ['#4df0ff', '#ffd166'];
+    colors.forEach((color, index) => {
+      const dot = group.addShape('circle', {
+        attrs: { x: 0, y: 0, r: 3.2, fill: color, shadowColor: color, shadowBlur: 10, opacity: 0.95 },
+        name: `flow-dot-${index}`,
+        draggable: false
+      });
+      dot.animate((ratio) => {
+        const t = index === 0 ? ratio : 1 - ratio;
+        const p = keyShape.getPoint(t);
+        return p ? { x: p.x, y: p.y } : {};
+      }, { repeat: true, duration: 2600, easing: 'linear' });
+    });
+  }
+}, 'line');
+
 function nodeStyle(n) {
   const color = typeColor(n);
   const offline = n.status === 'offline';
@@ -95,7 +117,7 @@ function toG6Data(data) {
     nodes: data.nodes.map((n) => ({ ...n, type: 'h3c-device', size: n.size, style: nodeStyle(n) })),
     edges: data.edges.map((e) => ({
       ...e,
-      type: 'line',
+      type: 'h3c-flow-edge',
       label: showLabels.value ? e.label : '',
       style: {
         stroke: e.status === 'down' ? '#ff4d5e' : '#3a7fd5',
@@ -258,6 +280,7 @@ watch(() => store.seq, () => {
             <div class="legend-item"><span class="legend-dot" style="background:#64748b" />离线</div>
             <div class="legend-item"><span class="legend-line" />正常链路</div>
             <div class="legend-item"><span class="legend-line down" />中断链路</div>
+            <div class="legend-item"><span class="legend-flow">●⇄●</span>数据双向流动</div>
           </div>
         </div>
       </div>
@@ -371,6 +394,7 @@ watch(() => store.seq, () => {
 .legend-sep { height: 1px; background: var(--border); margin: 7px 0; }
 .legend-line { width: 18px; height: 0; border-top: 1px dashed #3a7fd5; display: inline-block; }
 .legend-line.down { border-color: #ff4d5e; border-top-width: 2px; }
+.legend-flow { color: #4df0ff; font-size: 12px; letter-spacing: -1px; }
 .empty-detail { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55709c; text-align: center; padding: 20px; }
 .detail-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
 .detail-name { font-size: 17px; font-weight: 700; }
