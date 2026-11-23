@@ -206,6 +206,14 @@ async function applyLayout(id) {
   } catch (error) { ElMessage.error(error.message); }
 }
 
+async function saveToLayout(name) {
+  try {
+    await api.saveLayout(name, currentPositions());
+    ElMessage.success(`当前排布已保存到版本「${name}」`);
+    await loadData(false);
+  } catch (error) { ElMessage.error(error.message); }
+}
+
 async function removeLayout(id) {
   try {
     await ElMessageBox.confirm('确定删除该布局版本？', '删除布局', { type: 'warning' });
@@ -303,6 +311,7 @@ watch(() => store.seq, () => {
       <div class="panel graph-panel">
         <div class="panel-title">
           实时网络拓扑
+          <el-button size="small" type="primary" plain @click="openLayoutDialog">布局版本{{ activeLayout ? ` · ${activeLayout.name}` : '' }}</el-button>
           <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">{{ topology.nodes.length }} 节点 / {{ topology.edges.length }} 链路</span>
         </div>
         <div class="toolbar">
@@ -312,7 +321,6 @@ watch(() => store.seq, () => {
           <el-button size="small" :icon="ZoomOut" @click="zoom(0.8)">缩小</el-button>
           <el-button size="small" :icon="FullScreen" @click="fit">适应</el-button>
           <el-button size="small" @click="toggleLabels">{{ showLabels ? '隐藏' : '显示' }}标签</el-button>
-          <el-button size="small" type="primary" plain @click="openLayoutDialog">布局版本{{ activeLayout ? ` · ${activeLayout.name}` : '' }}</el-button>
           <el-input v-model="searchText" size="small" placeholder="搜索设备/IP" :prefix-icon="Search" style="width:170px;margin-left:auto" />
         </div>
         <div class="graph-area">
@@ -434,6 +442,7 @@ watch(() => store.seq, () => {
           <span class="layout-name">{{ l.name }}</span>
           <el-tag v-if="activeLayout?.id === l.id" size="small" type="success" effect="dark">使用中</el-tag>
           <el-button link type="primary" size="small" :disabled="activeLayout?.id === l.id" @click="applyLayout(l.id)">应用</el-button>
+          <el-button link type="primary" size="small" @click="saveToLayout(l.name)">保存</el-button>
           <el-button link type="danger" size="small" @click="removeLayout(l.id)">删除</el-button>
         </div>
       </div>
