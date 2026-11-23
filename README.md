@@ -83,6 +83,10 @@ frontend/src/views/       拓扑、设备、告警、设置、全屏大屏
 data/network.db           SQLite 数据（已 gitignore）
 ```
 
+## 图标来源
+
+拓扑节点使用 `frontend/src/assets/icons/` 下的标准 Cisco 设备 SVG（路由器、交换机、ASA 防火墙、服务器），来自开源项目 [bwks/network-icons-svg](https://github.com/bwks/network-icons-svg)，采用 GPL-3.0 许可证（`LICENSE` 已随图标一同存放）。图标为独立资源文件，通过 Vite 打包内联为 data URI，不产生外部请求。
+
 ## 已知边界
 
 - 演示模式数据为模拟生成，切换真实模式后需重新轮询
