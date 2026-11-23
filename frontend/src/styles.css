@@ -119,3 +119,150 @@ a { color: var(--primary); text-decoration: none; }
 .status-offline { background: #64748b; }
 .mono { font-family: Consolas, 'Courier New', monospace; }
 .muted { color: var(--muted); }
+
+/* ===== 全局按钮与组件配色（统一暗色主题，保证文字高对比） ===== */
+:root {
+  /* Element Plus 主色对齐本主题色板，让开关/复选/进度等组件一并协调 */
+  --el-color-primary: #2f8fff;
+  --el-color-primary-light-3: #5ca6ff;
+  --el-color-primary-light-5: #74b4ff;
+  --el-color-primary-light-7: #9fccff;
+  --el-color-primary-light-8: #b8d9ff;
+  --el-color-primary-light-9: #d6e9ff;
+  --el-color-primary-dark-2: #1c76e0;
+  --el-color-success: #20c997;
+  --el-color-warning: #ffb020;
+  --el-color-danger: #ff4d5e;
+  --el-color-error: #ff4d5e;
+  --el-color-info: #7e96bd;
+
+  /* 默认按钮：深蓝玻璃底 + 亮字，与面板/表格同色系 */
+  --el-button-font-weight: 600;
+  --el-button-text-color: #dce9ff;
+  --el-button-bg-color: rgba(30, 51, 85, .6);
+  --el-button-border-color: #35558a;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: rgba(47, 143, 255, .24);
+  --el-button-hover-border-color: #3f8ff0;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: rgba(47, 143, 255, .32);
+  --el-button-active-border-color: #2f8fff;
+  --el-button-disabled-text-color: #5b7093;
+  --el-button-disabled-bg-color: rgba(20, 33, 58, .5);
+  --el-button-disabled-border-color: #1e3355;
+}
+
+.el-button {
+  border-radius: 6px;
+  letter-spacing: .2px;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .1s ease;
+}
+.el-button:active { transform: translateY(1px); }
+
+/* 主按钮：品牌蓝 */
+.el-button--primary {
+  --el-button-text-color: #ffffff;
+  --el-button-bg-color: #2f8fff;
+  --el-button-border-color: #2f8fff;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: #47a0ff;
+  --el-button-hover-border-color: #47a0ff;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #1c76e0;
+  --el-button-active-border-color: #1c76e0;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0));
+}
+
+.el-button--success {
+  --el-button-text-color: #04231c;
+  --el-button-bg-color: #20c997;
+  --el-button-border-color: #20c997;
+  --el-button-hover-text-color: #04231c;
+  --el-button-hover-bg-color: #3ad6a8;
+  --el-button-hover-border-color: #3ad6a8;
+  --el-button-active-text-color: #04231c;
+  --el-button-active-bg-color: #14ab7d;
+  --el-button-active-border-color: #14ab7d;
+}
+
+.el-button--warning {
+  --el-button-text-color: #2b1a00;
+  --el-button-bg-color: #ffb020;
+  --el-button-border-color: #ffb020;
+  --el-button-hover-text-color: #2b1a00;
+  --el-button-hover-bg-color: #ffc04a;
+  --el-button-hover-border-color: #ffc04a;
+  --el-button-active-text-color: #2b1a00;
+  --el-button-active-bg-color: #e09410;
+  --el-button-active-border-color: #e09410;
+}
+
+.el-button--danger {
+  --el-button-text-color: #ffffff;
+  --el-button-bg-color: #f04557;
+  --el-button-border-color: #f04557;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: #ff5f6f;
+  --el-button-hover-border-color: #ff5f6f;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #d93547;
+  --el-button-active-border-color: #d93547;
+}
+
+.el-button--info {
+  --el-button-text-color: #eaf2ff;
+  --el-button-bg-color: #4a5f82;
+  --el-button-border-color: #4a5f82;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: #5d749b;
+  --el-button-hover-border-color: #5d749b;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #3b4e6d;
+  --el-button-active-border-color: #3b4e6d;
+}
+
+/* 幽灵按钮：透明蓝底 + 亮蓝描边 */
+.el-button.is-plain { --el-button-bg-color: rgba(47, 143, 255, .08); }
+.el-button--primary.is-plain {
+  --el-button-text-color: #86c0ff;
+  --el-button-bg-color: rgba(47, 143, 255, .08);
+  --el-button-border-color: rgba(47, 143, 255, .5);
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: rgba(47, 143, 255, .24);
+  --el-button-hover-border-color: #3f8ff0;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: rgba(47, 143, 255, .32);
+}
+.el-button--danger.is-plain {
+  --el-button-text-color: #ff8a95;
+  --el-button-bg-color: rgba(255, 77, 94, .08);
+  --el-button-border-color: rgba(255, 77, 94, .5);
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: rgba(255, 77, 94, .24);
+  --el-button-hover-border-color: #ff5f6f;
+}
+.el-button--success.is-plain,
+.el-button--warning.is-plain,
+.el-button--info.is-plain { --el-button-bg-color: rgba(255, 255, 255, .04); }
+
+/* 文字按钮：亮色文字 + 淡色 hover 反馈 */
+.el-button.is-link,
+.el-button.is-text {
+  --el-button-hover-bg-color: rgba(47, 143, 255, .12);
+  padding: 4px 6px;
+}
+.el-button--primary.is-link,
+.el-button--primary.is-text {
+  --el-button-text-color: #86c0ff;
+  --el-button-hover-text-color: #bcdcff;
+}
+.el-button--danger.is-link,
+.el-button--danger.is-text {
+  --el-button-text-color: #ff8a95;
+  --el-button-hover-text-color: #ffb3ba;
+  --el-button-hover-bg-color: rgba(255, 77, 94, .12);
+}
+.el-button--success.is-link,
+.el-button--success.is-text { --el-button-text-color: #4fdcb0; --el-button-hover-text-color: #86e9c9; }
+.el-button--warning.is-link,
+.el-button--warning.is-text { --el-button-text-color: #ffc457; --el-button-hover-text-color: #ffd98f; }
