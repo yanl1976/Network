@@ -80,6 +80,41 @@ export function getDeviceDetail(id) {
   return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs, links };
 }
 
+const ROLE_RANK = { core: 5, aggregation: 4, border: 3, access: 2, server: 1 };
+
+export function getPathFromDevice(ip) {
+  const devices = db.prepare('SELECT id, ip, hostname, role, status FROM devices').all();
+  const byId = new Map(devices.map((d) => [d.id, d]));
+  const byIp = new Map(devices.map((d) => [d.ip, d]));
+  const start = byIp.get(ip);
+  if (!start) return { path: [], error: '设备不在清单中' };
+  const links = db.prepare('SELECT * FROM links').all();
+  const adjacency = new Map(devices.map((d) => [d.ip, []]));
+  for (const link of links) {
+    const local = byId.get(link.local_device_id)?.ip;
+    const remote = link.remote_ip || (link.remote_device_id ? byId.get(link.remote_device_id)?.ip : null);
+    if (!local || !remote || local === remote || !adjacency.has(remote)) continue;
+    adjacency.get(local).push({ next: remote, localPort: link.local_port || '', remotePort: link.remote_port || '', bandwidth: link.bandwidth || '' });
+  }
+  const rank = (d) => ROLE_RANK[d?.role] ?? 0;
+  const path = [{ ip: start.ip, name: start.hostname || start.ip, role: start.role, rank: rank(start) }];
+  const visited = new Set([start.ip]);
+  let current = start;
+  while (rank(current) < ROLE_RANK.core) {
+    const options = (adjacency.get(current.ip) || [])
+      .filter((edge) => !visited.has(edge.next) && rank(byIp.get(edge.next)) > rank(current))
+      .sort((a, b) => rank(byIp.get(b.next)) - rank(byIp.get(a.next)));
+    if (!options.length) break;
+    const edge = options[0];
+    const peer = byIp.get(edge.next);
+    path[path.length - 1].uplinkPort = edge.localPort;
+    path.push({ ip: peer.ip, name: peer.hostname || peer.ip, role: peer.role, rank: rank(peer), downlinkPort: edge.remotePort, bandwidth: edge.bandwidth });
+    visited.add(peer.ip);
+    current = peer;
+  }
+  return { path };
+}
+
 export function getTopology() {
   const devices = db.prepare('SELECT id, ip, hostname, role, device_type, status, cpu, memory, model, location FROM devices').all();
   const deviceByIp = new Map(devices.map((d) => [d.ip, d]));

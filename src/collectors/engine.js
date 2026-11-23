@@ -3,6 +3,7 @@ import { collectSnmp, normalizeMac, lookupMacOnDevice } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
 import { getDeviceCredentials } from '../config.js';
+import { getPathFromDevice } from '../services/view.js';
 
 export function isSeeded() {
   return (db.prepare('SELECT COUNT(*) AS n FROM devices').get()?.n ?? 0) > 0;
@@ -118,7 +119,10 @@ export async function lookupMac(config, macInput) {
   for (const r of results) {
     const value = r.status === 'fulfilled' ? r.value : null;
     if (!value || value.ok === false) errors.push(value || { deviceIp: '-', error: '查询失败' });
-    else if (value.found) matches.push(value);
+    else if (value.found) {
+      const pathInfo = getPathFromDevice(value.deviceIp);
+      matches.push({ ...value, path: pathInfo.path || [] });
+    }
   }
   return { mac, matches, checked: targets.length, errors };
 }

@@ -166,6 +166,13 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
           <el-button link type="primary" size="small" @click="openMacDevice(m.deviceIp)">设备详情</el-button>
           <el-button link type="primary" size="small" @click="locateOnTopology(m.deviceIp)">拓扑定位</el-button>
         </div>
+        <div v-if="m.path?.length > 1" class="mac-path">
+          <span class="muted" style="font-size:11px">上行路径：</span>
+          <template v-for="(hop, i) in m.path" :key="hop.ip">
+            <span v-if="i" class="mac-path-arrow">→</span>
+            <span class="mac-hop" :class="'mac-role-' + hop.role">{{ hop.name }}<small v-if="hop.uplinkPort">:{{ hop.uplinkPort }}</small></span>
+          </template>
+        </div>
         <div v-if="macResult.errors.length" class="muted" style="font-size:11px;margin-top:8px">部分设备查询失败：{{ macResult.errors.map((e) => e.deviceIp || '-').join('、') }}</div>
       </div>
     </div>
@@ -291,6 +298,11 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .mac-bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; }
 .mac-result { padding: 4px 14px 12px; }
 .mac-match { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 6px; background: rgba(30,51,85,.35); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.mac-path { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 4px 10px 9px; font-size: 11px; }
+.mac-path-arrow { color: #5a78a8; }
+.mac-hop { padding: 2px 7px; border-radius: 10px; background: rgba(47,143,255,.14); border: 1px solid rgba(47,143,255,.35); color: #cfe0ff; }
+.mac-hop small { color: #8aa2c8; }
+.mac-role-core { background: rgba(55,211,155,.14); border-color: rgba(55,211,155,.4); color: #a7f3d0; }
 .filter-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .drawer-meta { display: grid; gap: 9px; font-size: 12px; padding-bottom: 12px; }
 .drawer-meta > div { display: flex; justify-content: space-between; gap: 14px; }
