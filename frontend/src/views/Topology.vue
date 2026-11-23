@@ -24,11 +24,13 @@ const statusLabels = { online: '在线', warning: '告警', critical: '严重', 
 
 const containerRef = ref(null);
 const chartRef = ref(null);
+const flowChartRef = ref(null);
 const graph = ref(null);
 const topology = ref({ nodes: [], edges: [] });
 const devices = ref([]);
 const selectedIp = ref(null);
 const detail = ref(null);
+const flowPopup = ref(null);
 const showLabels = ref(true);
 const loading = ref(false);
 const searchText = ref('');
@@ -37,6 +39,7 @@ const activeLayout = ref(null);
 const layoutDialog = ref(false);
 const layoutName = ref('');
 let chart = null;
+let flowChart = null;
 let resizeObserver = null;
 
 const stats = computed(() => {
@@ -134,6 +137,7 @@ function activePositions() {
 
 function initGraph() {
   if (!containerRef.value) return;
+  closeFlowPopup();
   graph.value?.destroy();
   const width = containerRef.value.clientWidth;
   const height = containerRef.value.clientHeight;
@@ -157,8 +161,9 @@ function initGraph() {
   g.on('node:click', (evt) => {
     const model = evt.item.getModel();
     selectNode(model.ip);
+    openFlowPopup(model, evt);
   });
-  g.on('canvas:click', () => { selectedIp.value = null; detail.value = null; });
+  g.on('canvas:click', () => { selectedIp.value = null; detail.value = null; closeFlowPopup(); });
   graph.value = g;
 }
 
@@ -233,6 +238,7 @@ async function selectNode(ip, keep = false) {
     detail.value = await api.device(device.id);
     await nextTick();
     renderChart(detail.value.metrics || []);
+    renderFlowChart(detail.value.metrics || []);
   } catch { detail.value = null; }
   if (!keep) graph.value?.focusItem(graph.value.findById(ip));
 }
@@ -249,6 +255,50 @@ function renderChart(metrics) {
     series: [
       { name: 'CPU%', type: 'line', smooth: true, showSymbol: false, data: metrics.map((m) => m.cpu), lineStyle: { color: '#2f8fff', width: 2 }, areaStyle: { color: 'rgba(47,143,255,.16)' } },
       { name: '内存%', type: 'line', smooth: true, showSymbol: false, data: metrics.map((m) => m.memory), lineStyle: { color: '#a06bff', width: 2 }, areaStyle: { color: 'rgba(160,107,255,.12)' } }
+    ]
+  }, true);
+}
+
+const flowCurrent = computed(() => {
+  const list = detail.value?.metrics || [];
+  const latest = list.length ? list[list.length - 1] : null;
+  return { in: Number(latest?.in_traffic ?? 0), out: Number(latest?.out_traffic ?? 0), points: list.length };
+});
+
+function openFlowPopup(model, evt) {
+  const rect = containerRef.value?.getBoundingClientRect();
+  if (!rect) return;
+  const x = (evt.clientX ?? evt.canvasX ?? 0) - rect.left;
+  const y = (evt.clientY ?? evt.canvasY ?? 0) - rect.top;
+  const width = 300;
+  const height = 250;
+  flowPopup.value = {
+    ip: model.ip,
+    name: model.hostname || model.label || model.ip,
+    left: Math.max(8, Math.min(x + 16, rect.width - width - 8)),
+    top: Math.max(8, Math.min(y - 30, rect.height - height - 8))
+  };
+}
+
+function closeFlowPopup() {
+  flowPopup.value = null;
+  flowChart?.dispose();
+  flowChart = null;
+}
+
+function renderFlowChart(metrics) {
+  if (!flowChartRef.value) return;
+  if (!flowChart) flowChart = echarts.init(flowChartRef.value, 'dark', { renderer: 'canvas' });
+  const points = metrics || [];
+  flowChart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 40, right: 12, top: 18, bottom: 20 },
+    tooltip: { trigger: 'axis', backgroundColor: '#14213a', borderColor: '#1e3355', textStyle: { color: '#dce9ff', fontSize: 11 } },
+    xAxis: { type: 'category', boundaryGap: false, data: points.map((m) => String(m.ts).slice(11, 16)), axisLabel: { color: '#6d84aa', fontSize: 9, interval: Math.max(0, Math.floor(points.length / 3)) }, axisLine: { lineStyle: { color: '#1e3355' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#182b48', type: 'dashed' } }, axisLabel: { color: '#6d84aa', fontSize: 9 } },
+    series: [
+      { name: '入流量', type: 'line', smooth: true, showSymbol: false, data: points.map((m) => m.in_traffic), lineStyle: { color: '#2f8fff', width: 2 }, areaStyle: { color: 'rgba(47,143,255,.16)' } },
+      { name: '出流量', type: 'line', smooth: true, showSymbol: false, data: points.map((m) => m.out_traffic), lineStyle: { color: '#37d39b', width: 2 }, areaStyle: { color: 'rgba(55,211,155,.12)' } }
     ]
   }, true);
 }
@@ -282,6 +332,7 @@ onMounted(async () => {
   resizeObserver = new ResizeObserver(() => {
     if (!graph.value || !containerRef.value) return;
     graph.value.changeSize(containerRef.value.clientWidth, containerRef.value.clientHeight);
+    flowChart?.resize();
   });
   resizeObserver.observe(containerRef.value);
 });
@@ -290,6 +341,7 @@ onUnmounted(() => {
   resizeObserver?.disconnect();
   graph.value?.destroy();
   chart?.dispose();
+  flowChart?.dispose();
 });
 
 watch(() => store.seq, () => {
@@ -332,6 +384,27 @@ watch(() => store.seq, () => {
             <div class="legend-item"><span class="legend-line" />正常链路</div>
             <div class="legend-item"><span class="legend-line down" />中断链路</div>
             <div class="legend-item"><span class="legend-flow" style="border-top:1px dashed #3a7fd5">- -</span>链路数据流动</div>
+          </div>
+          <div v-if="flowPopup" class="flow-popup" :style="{ left: flowPopup.left + 'px', top: flowPopup.top + 'px' }" @click.stop>
+            <div class="flow-popup-head">
+              <div>
+                <div class="flow-popup-name">{{ flowPopup.name }}</div>
+                <div class="flow-popup-ip mono">{{ flowPopup.ip }}</div>
+              </div>
+              <button class="flow-popup-close" title="关闭" @click="closeFlowPopup">×</button>
+            </div>
+            <div class="flow-current">
+              <div class="flow-current-item">
+                <span class="flow-current-label">当前入流量</span>
+                <span class="flow-current-value in">{{ flowCurrent.in.toFixed(1) }} <small>Mbps</small></span>
+              </div>
+              <div class="flow-current-item">
+                <span class="flow-current-label">当前出流量</span>
+                <span class="flow-current-value out">{{ flowCurrent.out.toFixed(1) }} <small>Mbps</small></span>
+              </div>
+            </div>
+            <div ref="flowChartRef" class="flow-chart" />
+            <div class="flow-popup-foot">近 {{ flowCurrent.points }} 个采样点 · 入/出流量趋势</div>
           </div>
         </div>
       </div>
@@ -464,6 +537,21 @@ watch(() => store.seq, () => {
 .legend-line { width: 18px; height: 0; border-top: 1px dashed #3a7fd5; display: inline-block; }
 .legend-line.down { border-color: #ff4d5e; border-top-width: 2px; }
 .legend-flow { color: #4df0ff; font-size: 12px; letter-spacing: -1px; }
+.flow-popup { position: absolute; z-index: 20; width: 300px; background: rgba(11,19,36,.97); border: 1px solid #2a4a7a; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 12px; color: #dce9ff; backdrop-filter: blur(8px); }
+.flow-popup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.flow-popup-name { font-size: 13px; font-weight: 700; }
+.flow-popup-ip { font-size: 10px; color: #6d84aa; margin-top: 2px; }
+.flow-popup-close { background: transparent; border: 0; color: #8aa2c8; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.flow-popup-close:hover { color: #fff; }
+.flow-current { display: flex; gap: 8px; margin-bottom: 8px; }
+.flow-current-item { flex: 1; background: rgba(30,51,85,.5); border: 1px solid #1e3355; border-radius: 6px; padding: 7px 9px; }
+.flow-current-label { display: block; font-size: 10px; color: #8aa2c8; }
+.flow-current-value { display: block; font-size: 17px; font-weight: 700; margin-top: 2px; }
+.flow-current-value.in { color: #2f8fff; }
+.flow-current-value.out { color: #37d39b; }
+.flow-current-value small { font-size: 10px; font-weight: 400; color: #8aa2c8; }
+.flow-chart { height: 130px; width: 100%; }
+.flow-popup-foot { font-size: 10px; color: #6d84aa; text-align: right; margin-top: 4px; }
 .empty-detail { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55709c; text-align: center; padding: 20px; }
 .detail-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
 .detail-name { font-size: 17px; font-weight: 700; }
