@@ -92,7 +92,8 @@ export function getDeviceCredentials(ip, ssh = null) {
   const specific = ip ? deviceOverrides()[ip] : null;
   return {
     username: specific?.username ?? env.NETWORK_SSH_USERNAME ?? legacy.username ?? 'admin',
-    password: specific?.password ?? env.NETWORK_SSH_PASSWORD ?? legacy.password ?? ''
+    password: specific?.password ?? env.NETWORK_SSH_PASSWORD ?? legacy.password ?? '',
+    superPassword: specific?.superPassword ?? env.NETWORK_SSH_SUPER_PASSWORD ?? ''
   };
 }
 
@@ -103,6 +104,7 @@ export function publicConfig(config = loadConfig()) {
     out.ssh.username = creds.username;
     out.ssh.password = '';
     out.ssh.passwordConfigured = !!creds.password;
+    out.ssh.superPasswordConfigured = !!creds.superPassword;
     out.ssh.deviceOverrides = Object.keys(deviceOverrides());
   }
   return out;

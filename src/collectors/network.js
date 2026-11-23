@@ -9,39 +9,104 @@ export const COMWARE_COMMANDS = {
   device: 'display device'
 };
 
+const SSH_ALGORITHMS = {
+  kex: [
+    'curve25519-sha256', 'curve25519-sha256@libssh.org',
+    'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521',
+    'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha256',
+    'diffie-hellman-group-exchange-sha1', 'diffie-hellman-group14-sha1',
+    'diffie-hellman-group1-sha1'
+  ],
+  cipher: [
+    'aes128-ctr', 'aes192-ctr', 'aes256-ctr',
+    'aes128-cbc', 'aes192-cbc', 'aes256-cbc', '3des-cbc'
+  ],
+  serverHostKey: ['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512', 'ssh-dss', 'ecdsa-sha2-nistp256']
+};
+
+const PROMPT_RE = /[>#]\s*$/;
+const PASSWORD_RE = /password\s*[:：]\s*$/i;
+const SUPER_FAIL_RE = /(fail|incorrect|error|denied|too many|无效|错误|失败)/i;
+
 export function sshExec(device, sshCfg, command) {
   return new Promise((resolve) => {
     const conn = new Client();
     let output = '';
     let errorText = '';
     let done = false;
+    let totalTimer = null;
+    let idleTimer = null;
     const finish = (ok) => {
       if (done) return;
       done = true;
+      clearTimeout(totalTimer);
+      clearTimeout(idleTimer);
       try { conn.end(); } catch { /* ignore */ }
       resolve({ ok, output, error: errorText });
     };
-    const timer = setTimeout(() => { errorText += '命令执行超时'; finish(false); }, sshCfg.timeout ?? 10000);
+
+    const needSuper = !!sshCfg.superPassword;
+    const timeout = Math.max(sshCfg.timeout ?? 10000, needSuper ? 30000 : 0);
+    totalTimer = setTimeout(() => { errorText += '命令执行超时'; finish(false); }, timeout);
 
     conn.on('ready', () => {
-      conn.exec(command, (err, stream) => {
-        if (err) { clearTimeout(timer); errorText += err.message; return finish(false); }
-        stream.on('data', (chunk) => { output += chunk.toString('utf8'); });
+      if (!needSuper) {
+        conn.exec(command, (err, stream) => {
+          if (err) { errorText += err.message; return finish(false); }
+          stream.on('data', (chunk) => { output += chunk.toString('utf8'); });
+          stream.stderr.on('data', (chunk) => { errorText += chunk.toString('utf8'); });
+          stream.on('close', () => finish(true));
+        });
+        return;
+      }
+      conn.shell((err, stream) => {
+        if (err) { errorText += err.message; return finish(false); }
+        let stage = 0;
+        let buffer = '';
+        const armIdle = () => {
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(() => finish(true), 1500);
+        };
+        stream.on('data', (chunk) => {
+          const text = chunk.toString('utf8');
+          buffer += text;
+          if (/--\s*More\s*--/i.test(text)) {
+            try { stream.write(' '); } catch { /* ignore */ }
+          }
+          if (stage === 0 && PROMPT_RE.test(buffer)) {
+            stage = 1; buffer = '';
+            stream.write('super\n');
+          } else if (stage === 1 && PASSWORD_RE.test(buffer)) {
+            stage = 2; buffer = '';
+            stream.write(sshCfg.superPassword + '\n');
+          } else if (stage === 2 && PROMPT_RE.test(buffer)) {
+            if (SUPER_FAIL_RE.test(buffer)) {
+              errorText += 'super 提权失败：' + buffer.trim();
+              return finish(false);
+            }
+            stage = 3; buffer = ''; output = '';
+            stream.write(command + '\n');
+            armIdle();
+          } else if (stage === 3) {
+            output += text;
+            armIdle();
+          }
+        });
         stream.stderr.on('data', (chunk) => { errorText += chunk.toString('utf8'); });
-        stream.on('close', () => { clearTimeout(timer); finish(true); });
+        stream.on('close', () => finish(stage >= 3));
       });
     });
-    conn.on('error', (err) => { clearTimeout(timer); errorText += err.message; finish(false); });
+    conn.on('error', (err) => { errorText += err.message; finish(false); });
     try {
       conn.connect({
         host: device.ip,
         port: sshCfg.port ?? 22,
         username: sshCfg.username ?? 'admin',
         password: sshCfg.password || undefined,
-        readyTimeout: sshCfg.timeout ?? 10000
+        readyTimeout: sshCfg.timeout ?? 10000,
+        algorithms: SSH_ALGORITHMS
       });
     } catch (err) {
-      clearTimeout(timer);
       errorText += err.message;
       finish(false);
     }
