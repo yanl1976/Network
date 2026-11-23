@@ -1,24 +1,23 @@
-import ciscoRouter from './assets/icons/cisco-router.svg?raw';
-import ciscoSwitchL3 from './assets/icons/cisco-switch-l3.svg?raw';
-import ciscoSwitchL2 from './assets/icons/cisco-switch-l2.svg?raw';
-import ciscoAsa from './assets/icons/cisco-asa.svg?raw';
-import serverSvg from './assets/icons/generic-server-1.svg?raw';
+import switchL3 from './assets/icons/generic-switch-l3-colour.svg?raw';
+import switchL2 from './assets/icons/generic-switch-l2-v1-colour.svg?raw';
+import router from './assets/icons/generic-router-square-colour.svg?raw';
+import firewall from './assets/icons/generic-firewall-v1-colour.svg?raw';
+import server from './assets/icons/generic-server-2.svg?raw';
 
 export const TYPE_COLORS = {
-  switchCore: '#7c5cff',
+  switchCore: '#2f8fff',
   switchAgg: '#2f8fff',
-  switchAccess: '#21c2b8',
-  firewall: '#ff6b6b',
-  router: '#ff9f43',
+  switchAccess: '#2f8fff',
+  firewall: '#d3453a',
+  router: '#2f8fff',
   server: '#8d9db6'
 };
 
 export function typeColor(node) {
   const kind = node.deviceType || node.type || (node.role === 'server' ? 'server' : 'switch');
-  if (kind === 'firewall' || kind === 'router' || kind === 'server') return TYPE_COLORS[kind];
-  if (node.role === 'core') return TYPE_COLORS.switchCore;
-  if (node.role === 'aggregation') return TYPE_COLORS.switchAgg;
-  return TYPE_COLORS.switchAccess;
+  if (kind === 'firewall') return TYPE_COLORS.firewall;
+  if (kind === 'server') return TYPE_COLORS.server;
+  return TYPE_COLORS.switchCore;
 }
 
 function toUri(svg) {
@@ -29,9 +28,9 @@ function toUri(svg) {
 
 export function deviceIconUri(node) {
   const kind = node.deviceType || node.type || 'switch';
-  if (kind === 'firewall') return toUri(ciscoAsa);
-  if (kind === 'router') return toUri(ciscoRouter);
-  if (kind === 'server') return toUri(serverSvg);
-  if (node.role === 'core' || node.role === 'aggregation') return toUri(ciscoSwitchL3);
-  return toUri(ciscoSwitchL2);
+  if (kind === 'firewall') return toUri(firewall);
+  if (kind === 'router') return toUri(router);
+  if (kind === 'server') return toUri(server);
+  if (node.role === 'core' || node.role === 'aggregation') return toUri(switchL3);
+  return toUri(switchL2);
 }
