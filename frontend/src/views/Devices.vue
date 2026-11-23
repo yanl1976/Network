@@ -92,7 +92,14 @@ async function viewConfig(id) {
 
 async function backupAll() {
   const result = await api.backup();
-  ElMessage.success(`配置备份完成：成功 ${result.filter((r) => r.ok).length} 台，失败 ${result.filter((r) => !r.ok).length} 台`);
+  const okList = result.filter((r) => r.ok);
+  const failList = result.filter((r) => !r.ok);
+  if (failList.length) {
+    const lines = failList.map((r) => `${r.ip || '未知设备'}：${r.error || '未知错误'}`).join('\n');
+    ElMessageBox.alert(lines, `备份完成：成功 ${okList.length} 台，失败 ${failList.length} 台`, { type: 'warning' });
+  } else {
+    ElMessage.success(`配置备份完成：成功 ${okList.length} 台`);
+  }
   await load();
 }
 
