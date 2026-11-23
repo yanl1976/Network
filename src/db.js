@@ -113,6 +113,21 @@ CREATE TABLE IF NOT EXISTS mode_data_snapshots (
   updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS mac_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mac TEXT NOT NULL,
+  device_id INTEGER,
+  device_ip TEXT,
+  device_name TEXT,
+  if_index INTEGER,
+  port TEXT,
+  vlan TEXT,
+  source TEXT,
+  updated_at TEXT,
+  UNIQUE(mac, device_ip, if_index, vlan)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mac_entries_mac ON mac_entries(mac);
 CREATE INDEX IF NOT EXISTS idx_interfaces_device ON interfaces(device_id);
 CREATE INDEX IF NOT EXISTS idx_links_local ON links(local_device_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(active, created_at);
@@ -223,5 +238,34 @@ export function activateLayout(id) {
 }
 
 export function clearAllData() {
-  db.exec('DELETE FROM metrics; DELETE FROM alerts; DELETE FROM links; DELETE FROM interfaces; DELETE FROM configs; DELETE FROM devices;');
+  db.exec('DELETE FROM metrics; DELETE FROM alerts; DELETE FROM links; DELETE FROM interfaces; DELETE FROM configs; DELETE FROM devices; DELETE FROM mac_entries;');
+}
+
+export function replaceMacEntries(deviceIp, rows) {
+  const ts = now();
+  const stmt = db.prepare(`INSERT INTO mac_entries (mac, device_id, device_ip, device_name, if_index, port, vlan, source, updated_at)
+    VALUES (@mac, @device_id, @device_ip, @device_name, @if_index, @port, @vlan, @source, @updated_at)
+    ON CONFLICT(mac, device_ip, if_index, vlan) DO UPDATE SET
+      device_id=excluded.device_id, device_name=excluded.device_name, port=excluded.port, source=excluded.source, updated_at=excluded.updated_at`);
+  db.transaction((list) => {
+    db.prepare('DELETE FROM mac_entries WHERE device_ip=?').run(deviceIp);
+    for (const row of list) stmt.run({ ...row, updated_at: ts });
+  })(rows);
+}
+
+export function listMacEntries({ mac = '', ip = '', limit = 500 } = {}) {
+  const clauses = [];
+  const params = {};
+  if (mac) {
+    clauses.push("(REPLACE(REPLACE(REPLACE(mac, ':', ''), '-', ''), '.', '') LIKE @mac OR mac LIKE @raw)");
+    params.mac = `%${String(mac).toLowerCase().replace(/[^0-9a-f]/g, '')}%`;
+    params.raw = `%${String(mac).toLowerCase()}%`;
+  }
+  if (ip) { clauses.push('device_ip = @ip'); params.ip = ip; }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  return db.prepare(`SELECT * FROM mac_entries ${where} ORDER BY updated_at DESC, mac LIMIT @limit`).all({ ...params, limit: Math.min(2000, Math.max(1, limit)) });
+}
+
+export function countMacEntries() {
+  return db.prepare('SELECT COUNT(*) AS n, COUNT(DISTINCT mac) AS devices FROM mac_entries').get();
 }

@@ -1,5 +1,5 @@
-import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert } from '../db.js';
-import { collectSnmp, normalizeMac, lookupMacOnDevice } from './snmp.js';
+import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries } from '../db.js';
+import { collectSnmp, normalizeMac, lookupMacOnDevice, collectMacTable } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
 import { getDeviceCredentials } from '../config.js';
@@ -100,6 +100,16 @@ export async function pollOnce(config) {
     offline: changes.filter((c) => !c.ok).length,
     changes
   };
+}
+
+export async function collectAllMacTables(config) {
+  const targets = config.devices.filter((d) => d.enabled !== false && d.type !== 'server');
+  const results = await Promise.allSettled(targets.map(async (device) => {
+    const rows = await collectMacTable(device, config.snmp);
+    replaceMacEntries(device.ip, rows.map((r) => ({ ...r, device_id: db.prepare('SELECT id FROM devices WHERE ip=?').get(device.ip)?.id ?? null, device_name: device.name })));
+    return { ip: device.ip, name: device.name, count: rows.length };
+  }));
+  return results.map((r) => r.status === 'fulfilled' ? r.value : { ip: '-', count: 0, error: r.reason?.message });
 }
 
 export async function lookupMac(config, macInput) {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Monitor, Connection, List, Bell, Setting, FullScreen, Refresh } from '@element-plus/icons-vue';
+import { Monitor, Connection, List, Bell, Setting, FullScreen, Refresh, Tools } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { api, watchEvents } from './api.js';
 import { store, pushEvent, refreshOverview } from './store.js';
@@ -62,6 +62,7 @@ onUnmounted(() => {
         <el-menu-item index="/topology"><el-icon><Monitor /></el-icon><span>网络拓扑</span></el-menu-item>
         <el-menu-item index="/devices"><el-icon><List /></el-icon><span>设备清单</span></el-menu-item>
         <el-menu-item index="/alerts"><el-icon><Bell /></el-icon><span>告警中心</span></el-menu-item>
+        <el-menu-item index="/tools"><el-icon><Tools /></el-icon><span>网络工具</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>系统设置</span></el-menu-item>
         <el-menu-item index="/screen"><el-icon><FullScreen /></el-icon><span>全屏展示</span></el-menu-item>
       </el-menu>

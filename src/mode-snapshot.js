@@ -1,6 +1,6 @@
 import { db } from './db.js';
 
-const DATA_TABLES = ['devices', 'interfaces', 'links', 'configs', 'alerts', 'metrics'];
+const DATA_TABLES = ['devices', 'interfaces', 'links', 'configs', 'alerts', 'metrics', 'mac_entries'];
 
 export function captureDataset() {
   const snapshot = {};

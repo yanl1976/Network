@@ -143,6 +143,12 @@ function expandCidr(cidr) {
   return Array.from({ length: Math.min(count, 65536) }, (_, i) => intToIp((base + i) >>> 0));
 }
 
+export async function checkPorts(ip, ports, timeoutMs = 800) {
+  const list = [...new Set(ports)];
+  const flags = await Promise.all(list.map((p) => probePort(ip, p, timeoutMs)));
+  return list.map((port, i) => ({ port, open: flags[i] }));
+}
+
 function probePort(ip, port, timeoutMs) {
   return new Promise((resolve) => {
     const socket = new net.Socket();

@@ -1,7 +1,8 @@
 import express from 'express';
 import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice, updateDevice, removeDevice } from '../config.js';
-import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout } from '../db.js';
-import { pollOnce, scanOnce, backupConfigs, lookupMac } from '../collectors/engine.js';
+import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout, listMacEntries, countMacEntries } from '../db.js';
+import { pollOnce, scanOnce, backupConfigs, lookupMac, collectAllMacTables } from '../collectors/engine.js';
+import { checkPorts } from '../collectors/network.js';
 import { seedDemo } from '../collectors/demo.js';
 import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
@@ -90,6 +91,21 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   });
   router.get('/mac-lookup', async (req, res) => {
     try { return ok(res, await lookupMac(configHolder.current, req.query.mac)); }
+    catch (error) { return fail(res, error.message); }
+  });
+  router.get('/mac-entries', (req, res) => ok(res, {
+    rows: listMacEntries({ mac: req.query.mac ?? '', ip: req.query.ip ?? '', limit: Number(req.query.limit) || 500 }),
+    stats: countMacEntries()
+  }));
+  router.post('/mac-collect', async (_req, res) => {
+    try { return ok(res, await collectAllMacTables(configHolder.current)); }
+    catch (error) { return fail(res, error.message); }
+  });
+  router.post('/tools/port-check', async (req, res) => {
+    const ip = String(req.body?.ip ?? '').trim();
+    const ports = (req.body?.ports ?? [22, 80, 161, 443]).map((p) => Number(p)).filter((p) => p > 0 && p < 65536);
+    if (!ip) return fail(res, '请输入目标 IP');
+    try { return ok(res, await checkPorts(ip, ports)); }
     catch (error) { return fail(res, error.message); }
   });
   router.post('/backup', async (req, res) => {

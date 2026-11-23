@@ -198,6 +198,49 @@ function macOidSuffix(mac) {
   return mac.split(':').map((part) => parseInt(part, 16)).join('.');
 }
 
+export async function collectMacTable(device, snmpCfg) {
+  const version = snmpCfg.version === '3' ? snmp.Version3 : snmp.Version2c;
+  const options = { timeout: snmpCfg.timeout ?? 3000, retries: snmpCfg.retries ?? 1, version };
+  const session = snmp.createSession(device.ip, snmpCfg.community ?? 'public', options);
+  session.timeout = options.timeout;
+  try {
+    const [qAddr, qPort, dAddr, dPort, baseMap, descrRows] = await Promise.all([
+      subtree(session, FDB_OID.dot1qAddress, macAddr),
+      subtree(session, FDB_OID.dot1qPort),
+      subtree(session, FDB_OID.dot1dAddress, macAddr),
+      subtree(session, FDB_OID.dot1dPort),
+      subtree(session, FDB_OID.basePortIfIndex),
+      subtree(session, FDB_OID.ifDescr)
+    ]);
+    const ifIndexByPort = new Map(baseMap.map((r) => [String(r.oid).slice(FDB_OID.basePortIfIndex.length + 1), number(r.value)]));
+    const portNameByIndex = new Map(descrRows.map((r) => [String(r.oid).slice(FDB_OID.ifDescr.length + 1), readable(r.value)]));
+    const out = [];
+    const byPort = (rows, addrRows, withVlan) => {
+      const portMap = new Map(rows.map((r) => [String(r.oid).slice((withVlan ? FDB_OID.dot1qPort : FDB_OID.dot1dPort).length + 1), number(r.value)]));
+      for (const r of addrRows) {
+        const mac = normalizeMac(r.value);
+        if (!mac) continue;
+        const key = String(r.oid).slice((withVlan ? FDB_OID.dot1qAddress : FDB_OID.dot1dAddress).length + 1);
+        const bridgePort = portMap.get(key);
+        if (!bridgePort) continue;
+        const ifIndex = ifIndexByPort.get(String(bridgePort)) || bridgePort;
+        out.push({ mac, ifIndex, port: portNameByIndex.get(String(ifIndex)) || `端口 ${ifIndex}`, vlan: withVlan ? key.split('.')[0] : '', source: withVlan ? 'dot1q' : 'dot1d' });
+      }
+    };
+    byPort(qPort, qAddr, true);
+    byPort(dPort, dAddr, false);
+    const seen = new Set();
+    return out.filter((r) => {
+      const key = `${r.mac}|${r.ifIndex}|${r.vlan}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  } finally {
+    session.close();
+  }
+}
+
 export async function lookupMacOnDevice(device, snmpCfg, mac) {
   const version = snmpCfg.version === '3' ? snmp.Version3 : snmp.Version2c;
   const options = { timeout: snmpCfg.timeout ?? 3000, retries: snmpCfg.retries ?? 1, version };
