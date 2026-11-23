@@ -178,3 +178,72 @@ function inferModel(sysDescr, fallback) {
   const match = text.match(/S\d{4}[A-Z\-]*|MSR\d{4}|F\d{3}[A-Z0-9\-]*/);
   return match ? `H3C ${match[0]}` : fallback || 'H3C 设备';
 }
+
+const FDB_OID = {
+  dot1dPort: '1.3.6.1.2.1.17.4.3.1.2',
+  dot1dAddress: '1.3.6.1.2.1.17.4.3.1.1',
+  basePortIfIndex: '1.3.6.1.2.1.17.1.4.1.2',
+  dot1qPort: '1.3.6.1.2.1.17.7.1.2.2.1.2',
+  dot1qAddress: '1.3.6.1.2.1.17.7.1.2.2.1.1',
+  ifDescr: '1.3.6.1.2.1.2.2.1.2'
+};
+
+export function normalizeMac(input) {
+  const hex = String(input ?? '').trim().toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (!/^[0-9a-f]{12}$/.test(hex)) return null;
+  return hex.match(/../g).join(':');
+}
+
+function macOidSuffix(mac) {
+  return mac.split(':').map((part) => parseInt(part, 16)).join('.');
+}
+
+export async function lookupMacOnDevice(device, snmpCfg, mac) {
+  const version = snmpCfg.version === '3' ? snmp.Version3 : snmp.Version2c;
+  const options = { timeout: snmpCfg.timeout ?? 3000, retries: snmpCfg.retries ?? 1, version };
+  const session = snmp.createSession(device.ip, snmpCfg.community ?? 'public', options);
+  session.timeout = options.timeout;
+  try {
+    const suffix = macOidSuffix(mac);
+    const candidates = [
+      `${FDB_OID.dot1dPort}.${suffix}`,
+      `${FDB_OID.dot1qPort}.1.${suffix}`
+    ];
+    let bridgePort = 0;
+    let source = '';
+    for (const oid of candidates) {
+      const value = number((await get(session, [oid]))[oid]);
+      if (value > 0) { bridgePort = value; source = oid === candidates[0] ? 'dot1d' : 'dot1q'; break; }
+    }
+    if (!bridgePort) {
+      const rows = await subtree(session, FDB_OID.dot1qAddress, macAddr);
+      const hit = rows.find((r) => r.value?.toLowerCase() === mac.toLowerCase());
+      if (hit) {
+        const key = hit.oid.slice(FDB_OID.dot1qAddress.length + 1);
+        const oid = `${FDB_OID.dot1qPort}.${key}`;
+        bridgePort = number((await get(session, [oid]))[oid]);
+        source = `dot1q(${key.split('.')[0]})`;
+      }
+    }
+    if (!bridgePort) {
+      const rows = await subtree(session, FDB_OID.dot1dAddress, macAddr);
+      const hit = rows.find((r) => r.value?.toLowerCase() === mac.toLowerCase());
+      if (hit) {
+        const key = hit.oid.slice(FDB_OID.dot1dAddress.length + 1);
+        const oid = `${FDB_OID.dot1dPort}.${key}`;
+        bridgePort = number((await get(session, [oid]))[oid]);
+        source = 'dot1d';
+      }
+    }
+    if (!bridgePort) return { found: false, ok: true };
+    const ifIndexMap = await get(session, [`${FDB_OID.basePortIfIndex}.${bridgePort}`]);
+    const ifIndex = number(ifIndexMap[`${FDB_OID.basePortIfIndex}.${bridgePort}`]) || bridgePort;
+    const descMap = await get(session, [`${FDB_OID.ifDescr}.${ifIndex}`]);
+    const port = readable(descMap[`${FDB_OID.ifDescr}.${ifIndex}`]) || `端口 ${ifIndex}`;
+    return { found: true, ok: true, port, ifIndex, bridgePort, source };
+  } catch (error) {
+    return { found: false, ok: false, error: error.message };
+  } finally {
+    session.close();
+  }
+}

@@ -1,5 +1,5 @@
 import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert } from '../db.js';
-import { collectSnmp } from './snmp.js';
+import { collectSnmp, normalizeMac, lookupMacOnDevice } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
 import { getDeviceCredentials } from '../config.js';
@@ -99,6 +99,28 @@ export async function pollOnce(config) {
     offline: changes.filter((c) => !c.ok).length,
     changes
   };
+}
+
+export async function lookupMac(config, macInput) {
+  const mac = normalizeMac(macInput);
+  if (!mac) throw new Error('MAC 地址格式无效，需 12 位十六进制字符');
+  const targets = config.devices.filter((d) => d.enabled !== false);
+  const results = await Promise.allSettled(targets.map(async (device) => {
+    try {
+      const hit = await lookupMacOnDevice(device, config.snmp, mac);
+      return { deviceIp: device.ip, deviceName: device.name, ...hit };
+    } catch (error) {
+      return { deviceIp: device.ip, deviceName: device.name, found: false, ok: false, error: error.message };
+    }
+  }));
+  const matches = [];
+  const errors = [];
+  for (const r of results) {
+    const value = r.status === 'fulfilled' ? r.value : null;
+    if (!value || value.ok === false) errors.push(value || { deviceIp: '-', error: '查询失败' });
+    else if (value.found) matches.push(value);
+  }
+  return { mac, matches, checked: targets.length, errors };
 }
 
 export async function scanOnce(config) {

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { Search, Refresh, Document } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
@@ -20,6 +21,10 @@ const managed = ref([]);
 const editDialog = ref(false);
 const editing = ref(false);
 const form = ref({});
+const router = useRouter();
+const macQuery = ref('');
+const macLoading = ref(false);
+const macResult = ref(null);
 
 const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
 
@@ -90,6 +95,27 @@ async function viewConfig(id) {
   configDialog.value = true;
 }
 
+async function doMacLookup() {
+  const value = macQuery.value.trim();
+  if (!value) { ElMessage.warning('请输入 MAC 地址'); return; }
+  macLoading.value = true;
+  try {
+    macResult.value = await api.macLookup(value);
+    if (!macResult.value.matches.length) ElMessage.info(`已检查 ${macResult.value.checked} 台设备，未找到该 MAC`);
+  } catch (error) { ElMessage.error(error.message); macResult.value = null; }
+  finally { macLoading.value = false; }
+}
+
+function openMacDevice(ip) {
+  const device = devices.value.find((d) => d.ip === ip);
+  if (device) openDetail(device);
+  else ElMessage.warning('该设备不在清单中');
+}
+
+function locateOnTopology(ip) {
+  router.push({ path: '/topology', query: { ip } });
+}
+
 async function backupAll() {
   const result = await api.backup();
   const okList = result.filter((r) => r.ok);
@@ -120,6 +146,27 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-button :icon="Refresh" size="small" @click="load">刷新</el-button>
         <el-button size="small" @click="openAdd">新增设备</el-button>
         <el-button type="primary" size="small" @click="backupAll">批量备份配置</el-button>
+      </div>
+    </div>
+
+    <div class="panel mac-locate">
+      <div class="panel-title">MAC 一键定位 <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">输入终端 MAC，反查其接入的交换机与端口</span></div>
+      <div class="mac-bar">
+        <el-input v-model="macQuery" size="small" placeholder="如 00:11:22:33:44:55 或 0011.2233.4455" style="width:320px" clearable @keyup.enter="doMacLookup" />
+        <el-button size="small" type="primary" :loading="macLoading" @click="doMacLookup">定位</el-button>
+      </div>
+      <div v-if="macResult" class="mac-result">
+        <div class="muted" style="font-size:12px;margin-bottom:8px">MAC {{ macResult.mac }} · 已检查 {{ macResult.checked }} 台设备 · 命中 {{ macResult.matches.length }} 处</div>
+        <div v-for="m in macResult.matches" :key="m.deviceIp" class="mac-match">
+          <span class="status-dot status-online" />
+          <b>{{ m.deviceName || m.deviceIp }}</b>
+          <span class="mono muted">{{ m.deviceIp }}</span>
+          <el-tag size="small" effect="dark" type="success">端口 {{ m.port }}</el-tag>
+          <span class="muted" style="font-size:11px">{{ m.source === 'dot1q' ? 'VLAN FDB' : 'FDB' }} · ifIndex {{ m.ifIndex }}</span>
+          <el-button link type="primary" size="small" @click="openMacDevice(m.deviceIp)">设备详情</el-button>
+          <el-button link type="primary" size="small" @click="locateOnTopology(m.deviceIp)">拓扑定位</el-button>
+        </div>
+        <div v-if="macResult.errors.length" class="muted" style="font-size:11px;margin-top:8px">部分设备查询失败：{{ macResult.errors.map((e) => e.deviceIp || '-').join('、') }}</div>
       </div>
     </div>
 
@@ -241,6 +288,9 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 </template>
 
 <style scoped>
+.mac-bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; }
+.mac-result { padding: 4px 14px 12px; }
+.mac-match { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 6px; background: rgba(30,51,85,.35); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 .filter-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .drawer-meta { display: grid; gap: 9px; font-size: 12px; padding-bottom: 12px; }
 .drawer-meta > div { display: flex; justify-content: space-between; gap: 14px; }

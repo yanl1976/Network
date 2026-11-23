@@ -26,6 +26,7 @@ export const api = {
   metrics: (deviceId, limit = 120) => request(`/metrics/${deviceId}?limit=${limit}`),
   poll: () => request('/poll', { method: 'POST' }),
   scan: () => request('/scan', { method: 'POST' }),
+  macLookup: (mac) => request(`/mac-lookup?mac=${encodeURIComponent(mac)}`),
   backup: (ips = []) => request('/backup', { method: 'POST', body: JSON.stringify({ ips }) }),
   settings: () => request('/settings'),
   saveSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),

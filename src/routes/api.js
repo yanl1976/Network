@@ -1,7 +1,7 @@
 import express from 'express';
 import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice, updateDevice, removeDevice } from '../config.js';
 import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout } from '../db.js';
-import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
+import { pollOnce, scanOnce, backupConfigs, lookupMac } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
 import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
@@ -86,6 +86,10 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   });
   router.post('/scan', async (_req, res) => {
     try { return ok(res, await scanOnce(configHolder.current)); }
+    catch (error) { return fail(res, error.message); }
+  });
+  router.get('/mac-lookup', async (req, res) => {
+    try { return ok(res, await lookupMac(configHolder.current, req.query.mac)); }
     catch (error) { return fail(res, error.message); }
   });
   router.post('/backup', async (req, res) => {

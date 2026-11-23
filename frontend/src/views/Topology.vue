@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import G6 from '@antv/g6';
 import * as echarts from 'echarts';
 import { Refresh, RefreshRight, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue';
@@ -22,6 +23,7 @@ const legendItems = [
 const roleLabels = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
 const statusLabels = { online: '在线', warning: '告警', critical: '严重', offline: '离线' };
 
+const route = useRoute();
 const containerRef = ref(null);
 const chartRef = ref(null);
 const flowChartRef = ref(null);
@@ -352,6 +354,8 @@ async function backupSelected() {
 
 onMounted(async () => {
   await loadData(true);
+  const targetIp = route.query.ip;
+  if (targetIp && devices.value.some((d) => d.ip === targetIp)) await selectNode(String(targetIp));
   resizeObserver = new ResizeObserver(() => {
     if (!graph.value || !containerRef.value) return;
     graph.value.changeSize(containerRef.value.clientWidth, containerRef.value.clientHeight);
