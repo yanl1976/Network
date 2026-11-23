@@ -101,7 +101,10 @@ export function getTopology() {
 
 export function getAlerts(activeOnly = false) {
   const sql = activeOnly ? 'SELECT * FROM alerts WHERE active=1 ORDER BY created_at DESC' : 'SELECT * FROM alerts ORDER BY active DESC, created_at DESC';
-  return db.prepare(sql).all().map((row) => ({ ...row, deviceName: db.prepare('SELECT hostname FROM devices WHERE id=?').get(row.device_id)?.hostname ?? row.device_ip }));
+  return db.prepare(sql).all().map((row) => {
+    const name = db.prepare('SELECT hostname FROM devices WHERE id=?').get(row.device_id)?.hostname ?? row.device_ip;
+    return { ...row, deviceName: name, device_name: name };
+  });
 }
 
 export function getConfigs(deviceId) {

@@ -1,14 +1,14 @@
 import express from 'express';
 import { loadConfig, updateSettings } from '../config.js';
 import { db } from '../db.js';
-import { pollOnce, scanOnce, backupConfigs, initialize } from '../collectors/engine.js';
+import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
 
 const ok = (res, data) => res.json({ code: 0, data });
 const fail = (res, message, status = 500) => res.status(status).json({ code: 1, message });
 
-export function createApi(configHolder, broadcast) {
+export function createApi(configHolder, broadcast, onSettingsChanged = () => {}) {
   const router = express.Router();
 
   router.get('/overview', (_req, res) => ok(res, getOverview(configHolder.current)));
@@ -35,7 +35,10 @@ export function createApi(configHolder, broadcast) {
     const data = getConfigContent(Number(req.params.id));
     return data ? ok(res, data) : fail(res, '配置记录不存在', 404);
   });
-  router.get('/metrics/:deviceId', (req, res) => ok(res, getMetrics(Number(req.params.deviceId), Number(req.query.limit ?? 120))));
+  router.get('/metrics/:deviceId', (req, res) => {
+    const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 120));
+    return ok(res, getMetrics(Number(req.params.deviceId), limit));
+  });
 
   router.post('/poll', async (_req, res) => {
     try {
@@ -57,6 +60,7 @@ export function createApi(configHolder, broadcast) {
   router.put('/settings', (req, res) => {
     try {
       configHolder.current = updateSettings(req.body ?? {});
+      onSettingsChanged();
       return ok(res, configHolder.current);
     } catch (error) { return fail(res, error.message); }
   });
@@ -64,6 +68,7 @@ export function createApi(configHolder, broadcast) {
     const mode = req.body?.mode === 'live' ? 'live' : 'demo';
     configHolder.current = updateSettings({ mode });
     if (mode === 'demo') seedDemo(configHolder.current);
+    onSettingsChanged();
     broadcast({ type: 'mode:changed', mode });
     return ok(res, { mode });
   });

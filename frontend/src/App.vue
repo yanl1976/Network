@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Monitor, Connection, List, Bell, Setting, FullScreen, Refresh, RefreshRight } from '@element-plus/icons-vue';
+import { Monitor, Connection, List, Bell, Setting, FullScreen, Refresh } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 import { api, watchEvents } from './api.js';
 import { store, pushEvent, refreshOverview } from './store.js';
 
@@ -20,6 +21,9 @@ async function poll() {
   try {
     await api.poll();
     await refreshOverview();
+    ElMessage.success('轮询完成，数据已刷新');
+  } catch (error) {
+    ElMessage.error(`轮询失败：${error.message}`);
   } finally {
     store.polling = false;
   }
@@ -30,7 +34,8 @@ onMounted(async () => {
   ws = watchEvents((msg) => {
     store.connected = true;
     pushEvent(msg);
-    if (msg.type === 'poll:done' || msg.type === 'data:reset' || msg.type === 'mode:changed') refreshOverview();
+    if (msg.type === 'poll:error') ElMessage.error(`后台轮询失败：${msg.message}`);
+    if (['poll:done', 'poll:error', 'data:reset', 'mode:changed'].includes(msg.type)) refreshOverview();
   });
   ws.onclose = () => { store.connected = false; };
   timer = setInterval(refreshOverview, 30000);

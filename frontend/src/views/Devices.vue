@@ -52,7 +52,7 @@ function statusTag(status) {
 }
 
 onMounted(load);
-watch(() => store.seq, () => { if (['poll:done', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
+watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
 </script>
 
 <template>
@@ -117,7 +117,7 @@ watch(() => store.seq, () => { if (['poll:done', 'data:reset', 'mode:changed'].i
           <div v-if="!detail.configs?.length" class="muted" style="font-size:12px">暂无配置备份，可在设备清单页执行批量备份</div>
           <div v-for="cfg in detail.configs || []" :key="cfg.id" class="config-row">
             <el-icon><Document /></el-icon>
-            <span class="mono">{{ cfg.hash.slice(0, 10) }}</span>
+            <span class="mono">{{ cfg.hash?.slice(0, 10) || '-' }}</span>
             <span class="muted">{{ cfg.captured_at?.replace('T', ' ').slice(0, 19) }}</span>
             <span class="muted">{{ cfg.bytes }} B</span>
             <el-button link type="primary" size="small" @click="viewConfig(cfg.id)">查看</el-button>

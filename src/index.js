@@ -16,17 +16,17 @@ app.use(express.json({ limit: '5mb' }));
 
 const server = http.createServer(app);
 const realtime = attachRealtime(server);
-app.use('/api', createApi(configHolder, realtime.broadcast));
+const scheduler = startScheduler(configHolder, realtime);
+app.use('/api', createApi(configHolder, realtime.broadcast, () => scheduler.schedule()));
 
 const dist = path.resolve(import.meta.dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
+  app.use('/api', (_req, res) => res.status(404).json({ code: 1, message: 'API 端点不存在' }));
   app.use((req, res) => res.sendFile(path.join(dist, 'index.html')));
 } else {
   app.get('/', (_req, res) => res.type('html').send('<h1>H3C 网络拓扑系统 API 已启动</h1><p>前端尚未构建，请先执行 npm run build 或使用 npm run frontend 开发模式。</p>'));
 }
-
-const scheduler = startScheduler(configHolder, realtime);
 
 let port = Number(process.env.PORT ?? 3000);
 server.on('error', (error) => {

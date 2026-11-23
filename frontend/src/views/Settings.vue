@@ -7,6 +7,8 @@ import { store, refreshOverview } from '../store.js';
 const config = ref(null);
 const draft = ref({});
 const saving = ref(false);
+const scanning = ref(false);
+const scanResult = ref(null);
 const subnetInput = ref('');
 
 import { typeColor } from '../device-icons.js';
@@ -59,6 +61,18 @@ async function reseed() {
   await api.reseed();
   await refreshOverview();
   ElMessage.success('演示数据已重置');
+}
+
+async function runScan() {
+  scanning.value = true;
+  try {
+    scanResult.value = await api.scan();
+    ElMessage.success(`扫描完成：探测 ${scanResult.value.scanned} 个地址，发现 ${scanResult.value.found.length} 个存活资产`);
+  } catch (error) {
+    ElMessage.error(`扫描失败：${error.message}`);
+  } finally {
+    scanning.value = false;
+  }
 }
 
 onMounted(load);
@@ -125,6 +139,11 @@ onMounted(load);
           <el-form-item label="超时(ms)"><el-input-number v-model="draft.scan.timeoutMs" :min="100" :step="100" /></el-form-item>
         </el-form>
         <div class="hint">161=SNMP / 22=SSH，用于判断设备类型并自动发现资产</div>
+        <el-button type="primary" size="small" :loading="scanning" style="margin:10px 16px 0" @click="runScan">执行网段扫描</el-button>
+        <div v-if="scanResult" class="hint" style="margin-top:8px">
+          已探测 {{ scanResult.scanned }} 个地址，发现 {{ scanResult.found.length }} 个存活资产
+          <span v-if="scanResult.newlyAdded">，其中 {{ scanResult.newlyAdded }} 个为新发现</span>
+        </div>
       </div>
 
       <div class="panel settings-card">

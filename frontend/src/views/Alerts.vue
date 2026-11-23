@@ -11,7 +11,7 @@ const typeFilter = ref('');
 const activeOnly = ref(true);
 const loading = ref(false);
 
-const typeLabels = { offline: '设备失联', cpu_high: 'CPU 过高', memory_high: '内存过高', port_down: '端口中断', link_loss: '链路中断' };
+const typeLabels = { offline: '设备失联', cpu_high: 'CPU 过高', memory_high: '内存过高', port_down: '端口中断' };
 const filtered = computed(() => alerts.value.filter((a) =>
   (!severityFilter.value || a.severity === severityFilter.value)
   && (!typeFilter.value || a.type === typeFilter.value)
@@ -45,7 +45,7 @@ function severityType(s) { return s === 'critical' ? 'danger' : s === 'warning' 
 function formatTime(ts) { return ts ? String(ts).replace('T', ' ').slice(0, 19) : '-'; }
 
 onMounted(load);
-watch(() => store.seq, () => { if (['poll:done', 'alert:resolved', 'alert:resolvedAll', 'data:reset'].includes(store.event?.type)) load(); });
+watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
 </script>
 
 <template>

@@ -108,6 +108,7 @@ const now = () => new Date().toISOString();
 
 export function upsertDevice(info) {
   const ts = now();
+  if (info.sysDescr && !info.sys_descr) info.sys_descr = info.sysDescr;
   const existing = db.prepare('SELECT id FROM devices WHERE ip = ?').get(info.ip);
   if (existing) {
     db.prepare(`UPDATE devices SET hostname=?, sys_descr=?, model=?, serial=?, role=?, device_type=?, location=?, status=?, cpu=?, memory=?, uptime=?, last_seen=?, updated_at=? WHERE ip=?`)
