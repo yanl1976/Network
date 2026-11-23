@@ -1,5 +1,5 @@
 import express from 'express';
-import { loadConfig, updateSettings } from '../config.js';
+import { loadConfig, updateSettings, publicConfig } from '../config.js';
 import { db } from '../db.js';
 import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
@@ -56,7 +56,7 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
     catch (error) { return fail(res, error.message); }
   });
 
-  router.get('/settings', (_req, res) => ok(res, configHolder.current));
+  router.get('/settings', (_req, res) => ok(res, publicConfig(configHolder.current)));
   router.put('/settings', (req, res) => {
     try {
       configHolder.current = updateSettings(req.body ?? {});

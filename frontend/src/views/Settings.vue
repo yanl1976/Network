@@ -118,10 +118,15 @@ onMounted(load);
         <div class="panel-title">SSH 配置抓取</div>
         <el-form label-width="100px" size="small">
           <el-form-item label="端口"><el-input-number v-model="draft.ssh.port" :min="1" :max="65535" /></el-form-item>
-          <el-form-item label="用户名"><el-input v-model="draft.ssh.username" placeholder="admin" /></el-form-item>
-          <el-form-item label="密码"><el-input v-model="draft.ssh.password" type="password" show-password placeholder="请填写设备SSH密码" /></el-form-item>
+          <el-form-item label="用户名"><el-input :model-value="config.ssh.username" disabled /></el-form-item>
+          <el-form-item label="密码">
+            <el-tag :type="config.ssh.passwordConfigured ? 'success' : 'warning'" size="small">
+              {{ config.ssh.passwordConfigured ? '已在 .env 配置' : '未配置（请在 .env 填写 NETWORK_SSH_PASSWORD）' }}
+            </el-tag>
+          </el-form-item>
           <el-form-item label="超时(ms)"><el-input-number v-model="draft.ssh.timeout" :min="1000" :step="1000" /></el-form-item>
         </el-form>
+        <div class="hint">登录凭据统一从项目根目录 <code>.env</code> 读取，界面不保存密码；按设备独立凭据请配置 NETWORK_SSH_DEVICES。修改 .env 后需重启服务。</div>
         <div class="hint">抓取命令：display current-configuration（Comware）</div>
       </div>
 

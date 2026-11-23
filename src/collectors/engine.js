@@ -2,6 +2,7 @@ import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAler
 import { collectSnmp } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
+import { getDeviceCredentials } from '../config.js';
 
 export function isSeeded() {
   return (db.prepare('SELECT COUNT(*) AS n FROM devices').get()?.n ?? 0) > 0;
@@ -87,7 +88,7 @@ export async function scanOnce(config) {
 export async function backupConfigs(config, deviceIps = []) {
   const targets = config.devices.filter((d) => deviceIps.length === 0 || deviceIps.includes(d.ip));
   const results = await Promise.allSettled(targets.map(async (device) => {
-    const result = await fetchConfig(device, config.ssh);
+    const result = await fetchConfig(device, { ...config.ssh, ...getDeviceCredentials(device.ip, config.ssh) });
     if (!result.ok) return { ip: device.ip, ok: false, error: result.error };
     const row = db.prepare('SELECT id FROM devices WHERE ip=?').get(device.ip);
     if (!row) return { ip: device.ip, ok: false, error: '设备未入库' };

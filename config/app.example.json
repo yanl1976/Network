@@ -8,8 +8,6 @@
   },
   "ssh": {
     "port": 22,
-    "username": "admin",
-    "password": "",
     "timeout": 10000
   },
   "scan": {
