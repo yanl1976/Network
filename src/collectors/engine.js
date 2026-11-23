@@ -27,6 +27,27 @@ function applyThresholds(deviceId, ip, cpu, memory, interfaces, config) {
   else resolveAlert('port_down', deviceId);
 }
 
+export function computeInterfaceTraffic(deviceId, interfaces) {
+  const prev = db.prepare('SELECT if_index, in_octets, out_octets, updated_at FROM interfaces WHERE device_id=?').all(deviceId);
+  if (!prev.length || !interfaces?.length) return { in: 0, out: 0 };
+  const t0 = Date.parse(prev[0].updated_at);
+  const dt = (Date.now() - t0) / 1000;
+  if (!Number.isFinite(dt) || dt <= 0 || dt > 3600) return { in: 0, out: 0 };
+  const prevMap = new Map(prev.map((r) => [r.if_index, r]));
+  let inBytes = 0;
+  let outBytes = 0;
+  for (const itf of interfaces) {
+    const old = prevMap.get(itf.ifIndex);
+    if (!old) continue;
+    inBytes += Math.max(0, Number(itf.inOctets ?? 0) - Number(old.in_octets ?? 0));
+    outBytes += Math.max(0, Number(itf.outOctets ?? 0) - Number(old.out_octets ?? 0));
+  }
+  return {
+    in: Number(((inBytes * 8) / dt / 1e6).toFixed(2)),
+    out: Number(((outBytes * 8) / dt / 1e6).toFixed(2))
+  };
+}
+
 export function initialize(config) {
   if (isSeeded()) return { seeded: false, mode: config.mode };
   if (config.mode === 'demo') {
@@ -50,13 +71,14 @@ export async function pollOnce(config) {
         role: device.role, deviceType: device.type ?? 'switch', location: device.location, status: 'online', cpu: data.cpu, memory: data.memory,
         uptime: data.uptime, last_seen: new Date().toISOString()
       });
+      const traffic = computeInterfaceTraffic(deviceId, data.interfaces);
       replaceInterfaces(deviceId, data.interfaces);
       const neighbors = data.neighbors.map((n) => {
         const r = resolveRemoteDevice(n, config);
         return { localPort: n.localPort, remoteIp: r.ip, remoteDeviceId: r.deviceId, remotePort: n.remotePort, remoteChassis: r.ip, bandwidth: null };
       });
       replaceLinks(deviceId, neighbors);
-      addMetric(deviceId, data.cpu, data.memory);
+      addMetric(deviceId, data.cpu, data.memory, traffic.in, traffic.out);
       applyThresholds(deviceId, device.ip, data.cpu, data.memory, data.interfaces, config);
       resolveAlert('offline', deviceId);
       return { ip: device.ip, ok: true };

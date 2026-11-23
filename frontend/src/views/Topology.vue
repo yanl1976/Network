@@ -177,7 +177,7 @@ async function loadData(resetLayout = false) {
     activeLayout.value = active || null;
     await nextTick();
     initGraph();
-    if (selectedIp.value) await selectNode(selectedIp.value, true);
+    if (selectedIp.value) await selectNode(selectedIp.value);
   } finally {
     loading.value = false;
   }
@@ -230,7 +230,7 @@ async function removeLayout(id) {
 
 function openLayoutDialog() { layoutDialog.value = true; }
 
-async function selectNode(ip, keep = false) {
+async function selectNode(ip) {
   selectedIp.value = ip;
   const device = devices.value.find((d) => d.ip === ip);
   if (!device) return;
@@ -240,7 +240,6 @@ async function selectNode(ip, keep = false) {
     renderChart(detail.value.metrics || []);
     renderFlowChart(detail.value.metrics || []);
   } catch { detail.value = null; }
-  if (!keep) graph.value?.focusItem(graph.value.findById(ip));
 }
 
 function renderChart(metrics) {
@@ -268,15 +267,26 @@ const flowCurrent = computed(() => {
 function openFlowPopup(model, evt) {
   const rect = containerRef.value?.getBoundingClientRect();
   if (!rect) return;
-  const x = (evt.clientX ?? evt.canvasX ?? 0) - rect.left;
-  const y = (evt.clientY ?? evt.canvasY ?? 0) - rect.top;
+  const point = graph.value?.getCanvasByPoint?.(model.x, model.y);
+  const cx = point?.x ?? ((evt.clientX ?? evt.canvasX ?? 0) - rect.left);
+  const cy = point?.y ?? ((evt.clientY ?? evt.canvasY ?? 0) - rect.top);
   const width = 300;
   const height = 250;
+  const gap = 26;
+  const pad = 8;
+  const candidates = [
+    { left: cx + gap, top: cy - height / 2, room: rect.width - cx },
+    { left: cx - width - gap, top: cy - height / 2, room: cx },
+    { left: cx - width / 2, top: cy + gap, room: rect.height - cy },
+    { left: cx - width / 2, top: cy - height - gap, room: cy }
+  ].sort((a, b) => b.room - a.room);
+  const fits = (c) => c.left >= pad && c.top >= pad && c.left + width <= rect.width - pad && c.top + height <= rect.height - pad;
+  const chosen = candidates.find(fits) || candidates[0];
   flowPopup.value = {
     ip: model.ip,
     name: model.hostname || model.label || model.ip,
-    left: Math.max(8, Math.min(x + 16, rect.width - width - 8)),
-    top: Math.max(8, Math.min(y - 30, rect.height - height - 8))
+    left: Math.max(pad, Math.min(chosen.left, rect.width - width - pad)),
+    top: Math.max(pad, Math.min(chosen.top, rect.height - height - pad))
   };
 }
 
