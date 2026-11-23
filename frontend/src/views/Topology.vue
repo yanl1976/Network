@@ -25,6 +25,7 @@ const statusLabels = { online: '在线', warning: '告警', critical: '严重', 
 const containerRef = ref(null);
 const chartRef = ref(null);
 const flowChartRef = ref(null);
+const sideFlowChartRef = ref(null);
 const graph = ref(null);
 const topology = ref({ nodes: [], edges: [] });
 const devices = ref([]);
@@ -40,6 +41,7 @@ const layoutDialog = ref(false);
 const layoutName = ref('');
 let chart = null;
 let flowChart = null;
+let sideFlowChart = null;
 let resizeObserver = null;
 
 const stats = computed(() => {
@@ -239,6 +241,7 @@ async function selectNode(ip) {
     await nextTick();
     renderChart(detail.value.metrics || []);
     renderFlowChart(detail.value.metrics || []);
+    renderSideFlowChart(detail.value.metrics || []);
   } catch { detail.value = null; }
 }
 
@@ -296,11 +299,9 @@ function closeFlowPopup() {
   flowChart = null;
 }
 
-function renderFlowChart(metrics) {
-  if (!flowChartRef.value) return;
-  if (!flowChart) flowChart = echarts.init(flowChartRef.value, 'dark', { renderer: 'canvas' });
+function trafficChartOption(metrics) {
   const points = metrics || [];
-  flowChart.setOption({
+  return {
     backgroundColor: 'transparent',
     grid: { left: 40, right: 12, top: 18, bottom: 20 },
     tooltip: { trigger: 'axis', backgroundColor: '#14213a', borderColor: '#1e3355', textStyle: { color: '#dce9ff', fontSize: 11 } },
@@ -310,7 +311,19 @@ function renderFlowChart(metrics) {
       { name: '入流量', type: 'line', smooth: true, showSymbol: false, data: points.map((m) => m.in_traffic), lineStyle: { color: '#2f8fff', width: 2 }, areaStyle: { color: 'rgba(47,143,255,.16)' } },
       { name: '出流量', type: 'line', smooth: true, showSymbol: false, data: points.map((m) => m.out_traffic), lineStyle: { color: '#37d39b', width: 2 }, areaStyle: { color: 'rgba(55,211,155,.12)' } }
     ]
-  }, true);
+  };
+}
+
+function renderFlowChart(metrics) {
+  if (!flowChartRef.value) return;
+  if (!flowChart) flowChart = echarts.init(flowChartRef.value, 'dark', { renderer: 'canvas' });
+  flowChart.setOption(trafficChartOption(metrics), true);
+}
+
+function renderSideFlowChart(metrics) {
+  if (!sideFlowChartRef.value) return;
+  if (!sideFlowChart) sideFlowChart = echarts.init(sideFlowChartRef.value, 'dark', { renderer: 'canvas' });
+  sideFlowChart.setOption(trafficChartOption(metrics), true);
 }
 
 function zoom(ratio) {
@@ -343,6 +356,7 @@ onMounted(async () => {
     if (!graph.value || !containerRef.value) return;
     graph.value.changeSize(containerRef.value.clientWidth, containerRef.value.clientHeight);
     flowChart?.resize();
+    sideFlowChart?.resize();
   });
   resizeObserver.observe(containerRef.value);
 });
@@ -352,6 +366,7 @@ onUnmounted(() => {
   graph.value?.destroy();
   chart?.dispose();
   flowChart?.dispose();
+  sideFlowChart?.dispose();
 });
 
 watch(() => store.seq, () => {
@@ -453,6 +468,20 @@ watch(() => store.seq, () => {
           <div class="chart-block">
             <div class="mini-title">性能趋势（近 24 小时）</div>
             <div ref="chartRef" class="chart" />
+          </div>
+          <div class="detail-section">
+            <div class="mini-title">实时流量</div>
+            <div class="detail-traffic">
+              <div class="detail-traffic-item in">
+                <span>当前入流量</span>
+                <b>{{ flowCurrent.in.toFixed(1) }} <small>Mbps</small></b>
+              </div>
+              <div class="detail-traffic-item out">
+                <span>当前出流量</span>
+                <b>{{ flowCurrent.out.toFixed(1) }} <small>Mbps</small></b>
+              </div>
+            </div>
+            <div ref="sideFlowChartRef" class="chart side-flow-chart" />
           </div>
           <div class="detail-section">
             <div class="mini-title">端口状态 <span class="muted">({{ detail.interfaces?.length || 0 }} 口)</span></div>
@@ -575,6 +604,14 @@ watch(() => store.seq, () => {
 .chart-block { padding: 0 12px 8px; }
 .mini-title { font-size: 12px; color: #b9cbe7; font-weight: 600; margin-bottom: 7px; }
 .chart { height: 130px; width: 100%; }
+.detail-traffic { display: flex; gap: 8px; margin-bottom: 8px; }
+.detail-traffic-item { flex: 1; background: rgba(30,51,85,.45); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; }
+.detail-traffic-item span { display: block; font-size: 10px; color: var(--muted); }
+.detail-traffic-item b { display: block; font-size: 16px; margin-top: 2px; }
+.detail-traffic-item.in b { color: #2f8fff; }
+.detail-traffic-item.out b { color: #37d39b; }
+.detail-traffic-item small { font-size: 10px; font-weight: 400; color: var(--muted); }
+.side-flow-chart { height: 120px; }
 .detail-section { padding: 8px 16px; border-top: 1px solid var(--border); }
 .port-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .port-item { display: flex; align-items: center; justify-content: space-between; background: rgba(20,33,58,.7); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 10px; }
