@@ -85,7 +85,7 @@ data/network.db           SQLite 数据（已 gitignore）
 
 ## 图标来源
 
-拓扑节点使用 `frontend/src/assets/icons/` 下的标准 Cisco 设备 SVG（路由器、交换机、ASA 防火墙、服务器），来自开源项目 [bwks/network-icons-svg](https://github.com/bwks/network-icons-svg)，采用 GPL-3.0 许可证（`LICENSE` 已随图标一同存放）。图标为独立资源文件，通过 Vite 打包内联为 data URI，不产生外部请求。
+拓扑节点使用 Cisco 经典彩色图标（亮青蓝 3D 方块 + 白色设备符号），原图 JPG 存放于 `01-color-jpg/`，已转换为透明底 PNG 放在 `frontend/src/assets/icons/`（switch-l3 / switch-l2 / router / firewall / server）。图标由 Vite 打包为静态资源，不产生外部请求。
 
 ## 已知边界
 
