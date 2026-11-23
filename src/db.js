@@ -107,6 +107,12 @@ CREATE TABLE IF NOT EXISTS topology_layouts (
   updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS mode_data_snapshots (
+  mode TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_interfaces_device ON interfaces(device_id);
 CREATE INDEX IF NOT EXISTS idx_links_local ON links(local_device_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(active, created_at);

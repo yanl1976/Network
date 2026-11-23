@@ -3,6 +3,7 @@ import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice,
 import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout } from '../db.js';
 import { pollOnce, scanOnce, backupConfigs } from '../collectors/engine.js';
 import { seedDemo } from '../collectors/demo.js';
+import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
 
 const ok = (res, data) => res.json({ code: 0, data });
@@ -100,19 +101,35 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
       return ok(res, configHolder.current);
     } catch (error) { return fail(res, error.message); }
   });
-  router.post('/mode', (req, res) => {
-    const mode = req.body?.mode === 'live' ? 'live' : 'demo';
-    configHolder.current = updateSettings({ mode });
-    if (mode === 'demo') seedDemo(configHolder.current);
-    onSettingsChanged();
-    broadcast({ type: 'mode:changed', mode });
-    return ok(res, { mode });
+  router.post('/mode', async (req, res) => {
+    const target = req.body?.mode === 'live' ? 'live' : 'demo';
+    const previous = configHolder.current?.mode === 'live' ? 'live' : 'demo';
+    if (target === previous) return ok(res, { mode: target });
+    try {
+      saveModeSnapshot(previous, captureDataset());
+      configHolder.current = updateSettings({ mode: target });
+      const snapshot = loadModeSnapshot(target);
+      if (snapshot) {
+        restoreDataset(snapshot);
+      } else if (target === 'demo') {
+        seedDemo(configHolder.current);
+      } else {
+        restoreDataset(null);
+        await pollOnce(configHolder.current);
+      }
+      onSettingsChanged();
+      broadcast({ type: 'mode:changed', mode: target });
+      return ok(res, { mode: target, restored: Boolean(snapshot) });
+    } catch (error) { return fail(res, error.message); }
   });
   router.post('/reseed', (_req, res) => {
-    configHolder.current = loadConfig();
-    seedDemo(configHolder.current);
-    broadcast({ type: 'data:reset' });
-    return ok(res, { reseeded: true });
+    try {
+      configHolder.current = loadConfig();
+      seedDemo(configHolder.current);
+      saveModeSnapshot('demo', captureDataset());
+      broadcast({ type: 'data:reset' });
+      return ok(res, { reseeded: true });
+    } catch (error) { return fail(res, error.message); }
   });
 
   return router;

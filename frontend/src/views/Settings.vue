@@ -47,17 +47,19 @@ async function save() {
 async function changeMode(mode) {
   if (config.value.mode === mode) return;
   await ElMessageBox.confirm(
-    mode === 'demo' ? '切换到演示模式会重置为内置 H3C 模拟拓扑，确定继续？' : '切换到真实采集模式后将按设备清单执行 SNMP 采集，请确认凭据已配置。',
-    '切换运行模式', { type: 'warning' }
+    mode === 'demo'
+      ? '切换后当前真实采集数据会完整保留，下次切回自动恢复；演示模式使用内置 H3C 模拟拓扑。确定继续？'
+      : '切换后当前演示数据会完整保留，下次切回自动恢复；真实采集模式按设备清单执行 SNMP 采集。确定继续？',
+    '切换运行模式', { type: 'info' }
   );
   await api.setMode(mode);
   await load();
   await refreshOverview();
-  ElMessage.success(`已切换到${mode === 'demo' ? '演示模式' : '真实采集模式'}`);
+  ElMessage.success(`已切换到${mode === 'demo' ? '演示模式' : '真实采集模式'}，数据已保留`);
 }
 
 async function reseed() {
-  await ElMessageBox.confirm('将清空当前数据并重新生成演示拓扑，确定继续？', '重置数据', { type: 'warning' });
+  await ElMessageBox.confirm('将重新生成演示拓扑；另一运行模式的数据不受影响，确定继续？', '重置演示数据', { type: 'warning' });
   await api.reseed();
   await refreshOverview();
   ElMessage.success('演示数据已重置');
