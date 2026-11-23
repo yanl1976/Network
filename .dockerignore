@@ -1,0 +1,11 @@
+node_modules
+frontend/node_modules
+frontend/dist
+data
+.git
+01-color-jpg
+*.log
+.env.example
+Dockerfile.*
+docker-compose.yml
+.dockerignore
