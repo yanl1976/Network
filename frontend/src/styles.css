@@ -95,6 +95,8 @@ a { color: var(--primary); text-decoration: none; }
 .el-menu-item.is-active { background: rgba(47, 143, 255, .16) !important; color: #6fb0ff !important; }
 .el-menu-item:hover { background: rgba(47, 143, 255, .1) !important; }
 .el-table { --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: rgba(30, 51, 85, .45); --el-table-border-color: #1e3355; --el-table-text-color: var(--text); --el-table-header-text-color: #9fb4d6; }
+.el-table__body tr:hover > td.el-table__cell { background: rgba(47, 143, 255, .16) !important; }
+.el-table__body tr.current-row > td.el-table__cell { background: rgba(47, 143, 255, .2) !important; }
 .el-table__inner-wrapper::before { display: none; }
 .el-dialog, .el-drawer { --el-dialog-bg-color: #101b31; --el-drawer-bg-color: #101b31; background: #101b31; }
 .el-dialog__title, .el-drawer__title { color: #eaf2ff; }
