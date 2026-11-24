@@ -27,6 +27,21 @@ const macLoading = ref(false);
 const macResult = ref(null);
 const portView = ref('panel');
 const selectedPort = ref(null);
+const unitGroup = ref(true);
+
+const portPanels = computed(() => {
+  const list = detail.value?.interfaces || [];
+  const units = detail.value?.portUnits || [];
+  if (!unitGroup.value || units.length < 2) {
+    return [{ unit: null, label: '', stats: detail.value?.portStats, ports: list }];
+  }
+  return units.map((u) => ({
+    unit: u.unit,
+    label: `单元 ${u.unit}`,
+    stats: u,
+    ports: list.filter((p) => (p.unit ?? 0) === u.unit)
+  }));
+});
 
 const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
 
@@ -257,20 +272,27 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
               (物理 {{ detail.portStats.total }} · UP {{ detail.portStats.up }} · DOWN {{ detail.portStats.down }}<template v-if="detail.portStats.hidden"> · 隐藏 {{ detail.portStats.hidden }} 个逻辑口</template>)
             </span>
             <span class="muted" v-else>({{ detail.interfaces?.length || 0 }})</span>
-            <el-radio-group v-model="portView" size="small" class="port-view-switch">
-              <el-radio-button label="panel">面板</el-radio-button>
-              <el-radio-button label="table">表格</el-radio-button>
-            </el-radio-group>
+            <div class="port-switch-wrap">
+              <el-radio-group v-if="detail.portUnits?.length > 1" v-model="unitGroup" size="small">
+                <el-radio-button :label="true">分组</el-radio-button>
+                <el-radio-button :label="false">合并</el-radio-button>
+              </el-radio-group>
+              <el-radio-group v-model="portView" size="small">
+                <el-radio-button label="panel">面板</el-radio-button>
+                <el-radio-button label="table">表格</el-radio-button>
+              </el-radio-group>
+            </div>
           </div>
           <template v-if="portView === 'panel'">
             <div v-if="!detail.interfaces?.length" class="muted" style="font-size:12px;padding:16px 0">该设备暂无物理端口数据</div>
-            <div v-else class="switch-panel">
+            <div v-for="panel in portPanels" :key="panel.unit ?? 'all'" class="switch-panel">
               <div class="switch-panel-head">
-                <span class="switch-panel-model">{{ detail.model || '交换机' }}</span>
-                <span class="muted">物理端口面板 · 点击端口定位链路</span>
+                <span class="switch-panel-model">{{ panel.label || (detail.model || '交换机') }}</span>
+                <span class="muted" v-if="panel.stats">UP {{ panel.stats.up }} / DOWN {{ panel.stats.down }}</span>
+                <span class="muted">点击端口定位链路</span>
               </div>
               <div class="switch-port-grid">
-                <el-tooltip v-for="p in detail.interfaces" :key="p.if_index" placement="top" :show-after="150">
+                <el-tooltip v-for="p in panel.ports" :key="p.if_index" placement="top" :show-after="150">
                   <template #content>
                     <div class="port-tip">
                       <div><b class="mono">{{ p.if_name }}</b><span v-if="p.uplink" class="tip-uplink">上联</span></div>
@@ -286,8 +308,8 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
                 </el-tooltip>
               </div>
               <div class="switch-legend">
-                <span><i class="legend-led up"></i>UP {{ detail.portStats?.up ?? 0 }}</span>
-                <span><i class="legend-led down"></i>DOWN {{ detail.portStats?.down ?? 0 }}</span>
+                <span><i class="legend-led up"></i>UP {{ panel.stats?.up ?? 0 }}</span>
+                <span><i class="legend-led down"></i>DOWN {{ panel.stats?.down ?? 0 }}</span>
                 <span><i class="legend-led uplink"></i>上联口</span>
               </div>
             </div>
@@ -386,8 +408,8 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .cred-divider { font-size: 12px; color: #cfe0ff; font-weight: 600; margin: 6px 0 12px 96px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* 交换机端口面板 */
-.port-view-switch { margin-left: auto; }
-.switch-panel { background: linear-gradient(180deg, #16233c, #0d1629); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 12px; }
+.port-switch-wrap { margin-left: auto; display: flex; gap: 6px; }
+.switch-panel { background: linear-gradient(180deg, #16233c, #0d1629); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 12px; margin-bottom: 10px; }
 .switch-panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 11px; }
 .switch-panel-model { color: #eaf2ff; font-weight: 600; }
 .switch-port-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }

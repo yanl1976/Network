@@ -16,6 +16,12 @@ function portKey(name) {
   return String(name ?? '').match(/(\d+(?:\/\d+)+)/)?.[1] || '';
 }
 
+// IRF 成员号 / 框式槽位号：取端口名前缀后的第一段数字（GE1/0/1 -> 1, XGE2/0/1 -> 2）
+function unitOf(name) {
+  const m = String(name ?? '').match(/^(?:100GE|25GE|40GE|XGE|TGE|GE|FE|CE|GigabitEthernet|Ten-GigabitEthernet|TwentyfiveGigE|FortyGigE|HundredGigE|FastEthernet|Ethernet|Eth)\s*(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
 function deviceTypeOf(row) {
   if (row.device_type) return row.device_type;
   const name = (row.hostname || '').toUpperCase();
@@ -104,14 +110,27 @@ export function getDeviceDetail(id) {
     };
   });
   const uplinkKeys = new Set(links.filter((l) => l.direction === 'out').map((l) => portKey(l.localPort)).filter(Boolean));
-  const physicalInterfaces = interfaces.map((i) => ({ ...i, uplink: uplinkKeys.has(portKey(i.if_name)) }));
+  const physicalInterfaces = interfaces.map((i) => ({
+    ...i,
+    unit: unitOf(i.if_name) ?? 0,
+    uplink: uplinkKeys.has(portKey(i.if_name))
+  }));
+  const unitMap = new Map();
+  for (const i of physicalInterfaces) {
+    if (!unitMap.has(i.unit)) unitMap.set(i.unit, { unit: i.unit, total: 0, up: 0, down: 0 });
+    const stat = unitMap.get(i.unit);
+    stat.total++;
+    if (i.oper_status === 1) stat.up++; else stat.down++;
+  }
+  const portUnits = [...unitMap.values()].sort((a, b) => a.unit - b.unit);
   const portStats = {
     total: interfaces.length,
     up: interfaces.filter((i) => i.oper_status === 1).length,
     down: interfaces.filter((i) => i.oper_status !== 1).length,
-    hidden: allInterfaces.length - interfaces.length
+    hidden: allInterfaces.length - interfaces.length,
+    units: portUnits.length
   };
-  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces: physicalInterfaces, portStats, metrics, alerts, configs, links };
+  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces: physicalInterfaces, portStats, portUnits, metrics, alerts, configs, links };
 }
 
 const ROLE_RANK = { core: 5, aggregation: 4, border: 3, access: 2, server: 1 };
