@@ -268,21 +268,50 @@ export function getImpactAnalysis(ip) {
   };
 }
 
-export function getTopology() {
+export function getTopology(config) {
+  const utilWarn = Number(config?.poll?.thresholds?.portUtilWarn ?? 80);
   const devices = db.prepare('SELECT id, ip, hostname, role, device_type, status, cpu, memory, model, location FROM devices').all();
   const deviceByIp = new Map(devices.map((d) => [d.ip, d]));
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+
+  // 端口利用率索引：按 (device_id, 端口数字段) 归一，兼容 GE1/0/1 与 GigabitEthernet1/0/1 两种命名
+  const portUtil = new Map();
+  for (const row of db.prepare('SELECT device_id, if_name, if_descr, in_util, out_util, oper_status FROM interfaces').all()) {
+    const port = portKey(row.if_name) || portKey(row.if_descr);
+    if (!port) continue;
+    const k = `${row.device_id}|${port}`;
+    const cur = { inUtil: Number(row.in_util) || 0, outUtil: Number(row.out_util) || 0, operStatus: row.oper_status };
+    cur.utilization = Math.max(cur.inUtil, cur.outUtil);
+    const prev = portUtil.get(k);
+    if (!prev || cur.utilization > prev.utilization) portUtil.set(k, cur);
+  }
+  const linkPortUtil = (deviceId, portName) => {
+    if (!deviceId || !portName) return null;
+    return portUtil.get(`${deviceId}|${portKey(portName)}`) ?? null;
+  };
+
   const links = db.prepare('SELECT * FROM links').all();
   const seen = new Set();
   const edges = [];
 
   for (const link of links) {
-    const localIp = link.local_device_id ? devices.find((d) => d.id === link.local_device_id)?.ip ?? null : null;
-    const remoteIp = link.remote_ip || (link.remote_device_id ? devices.find((d) => d.id === link.remote_device_id)?.ip : null);
+    const localDev = link.local_device_id ? deviceById.get(link.local_device_id) : null;
+    const localIp = localDev?.ip ?? null;
+    const remoteDev = link.remote_device_id ? deviceById.get(link.remote_device_id) : null;
+    const remoteIp = link.remote_ip || remoteDev?.ip || null;
     if (!localIp || !remoteIp || localIp === remoteIp) continue;
     const key = [localIp, remoteIp].sort().join('|');
     if (seen.has(key)) continue;
     seen.add(key);
-    const up = deviceByIp.get(localIp)?.status !== 'offline' && deviceByIp.get(remoteIp)?.status !== 'offline';
+    const localPortInfo = linkPortUtil(localDev?.id, link.local_port);
+    const remotePortInfo = linkPortUtil(remoteDev?.id, link.remote_port);
+    const portInfos = [localPortInfo, remotePortInfo].filter(Boolean);
+    const utilization = portInfos.length ? Math.max(...portInfos.map((p) => p.utilization)) : 0;
+    const inUtil = portInfos.length ? Math.max(...portInfos.map((p) => p.inUtil)) : 0;
+    const outUtil = portInfos.length ? Math.max(...portInfos.map((p) => p.outUtil)) : 0;
+    const portDown = portInfos.some((p) => p.operStatus === 2);
+    const up = localDev?.status !== 'offline' && remoteDev?.status !== 'offline' && !portDown;
+    const trafficLevel = !up ? 'down' : utilization >= utilWarn ? 'congested' : utilization >= utilWarn * 0.6 ? 'warning' : 'normal';
     edges.push({
       id: `e-${key}`,
       source: localIp,
@@ -291,6 +320,11 @@ export function getTopology() {
       bandwidth: link.bandwidth || '',
       localPort: link.local_port,
       remotePort: link.remote_port,
+      utilization: Number(utilization.toFixed(1)),
+      inUtil: Number(inUtil.toFixed(1)),
+      outUtil: Number(outUtil.toFixed(1)),
+      trafficLevel,
+      trafficLabel: `入${inUtil.toFixed(0)}% / 出${outUtil.toFixed(0)}%`,
       status: up ? 'up' : 'down'
     });
   }
@@ -310,7 +344,7 @@ export function getTopology() {
     size: { core: 52, aggregation: 42, border: 40, access: 32, server: 30 }[d.role] ?? 32
   }));
 
-  return { nodes, edges, updatedAt: new Date().toISOString() };
+  return { nodes, edges, thresholds: { portUtilWarn: utilWarn }, updatedAt: new Date().toISOString() };
 }
 
 export function getAlerts(activeOnly = false) {

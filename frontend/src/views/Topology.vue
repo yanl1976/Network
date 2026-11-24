@@ -57,6 +57,8 @@ const stats = computed(() => {
   };
 });
 
+const trafficWarn = computed(() => Number(topology.value.thresholds?.portUtilWarn ?? 80));
+
 const filteredDevices = computed(() => {
   const q = searchText.value.trim().toLowerCase();
   if (!q) return devices.value;
@@ -112,13 +114,16 @@ function toG6Data(data) {
     nodes: data.nodes.map((n) => ({ ...n, type: 'h3c-device', size: n.size, style: nodeStyle(n) })),
     edges: data.edges
       .filter((e) => nodeIps.has(e.source) && nodeIps.has(e.target))
-      .map((e) => ({
-        ...e,
-        type: 'h3c-flow-edge',
-        label: showLabels.value ? e.label : '',
-        style: FLOW_EDGE_STYLE(e.status),
-        labelCfg: { autoRotate: true, style: { fill: '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
-      }))
+      .map((e) => {
+        const busy = e.trafficLevel === 'warning' || e.trafficLevel === 'congested';
+        return {
+          ...e,
+          type: 'h3c-flow-edge',
+          label: showLabels.value ? (busy ? `${e.label}${e.label ? ' ' : ''}${Math.round(e.utilization)}%` : e.label) : '',
+          style: FLOW_EDGE_STYLE(e.status, e.trafficLevel),
+          labelCfg: { autoRotate: true, style: { fill: e.trafficLevel === 'congested' ? '#ff8b96' : e.trafficLevel === 'warning' ? '#ffd08a' : '#7e96bd', fontSize: 9, background: { fill: '#0c1426', padding: [2, 4, 2, 4], radius: 2 } } }
+        };
+      })
   };
 }
 
@@ -418,6 +423,8 @@ watch(() => store.seq, () => {
             <div class="legend-item"><span class="legend-dot status-dot" style="background:#ff4d5e" />告警</div>
             <div class="legend-item"><span class="legend-dot" style="background:#64748b" />离线</div>
             <div class="legend-item"><span class="legend-line" />正常链路</div>
+            <div class="legend-item"><span class="legend-line warn" />高负载 ≥{{ Math.round(trafficWarn * 0.6) }}%</div>
+            <div class="legend-item"><span class="legend-line busy" />拥塞 ≥{{ trafficWarn }}%</div>
             <div class="legend-item"><span class="legend-line down" />中断链路</div>
             <div class="legend-item"><span class="legend-flow" style="border-top:1px dashed #3a7fd5">- -</span>链路数据流动</div>
           </div>
@@ -566,6 +573,8 @@ watch(() => store.seq, () => {
 .legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
 .legend-sep { height: 1px; background: var(--border); margin: 7px 0; }
 .legend-line { width: 18px; height: 0; border-top: 1px dashed #3a7fd5; display: inline-block; }
+.legend-line.warn { border-color: #ffb020; border-top-width: 2px; }
+.legend-line.busy { border-color: #ff4d5e; border-top-width: 3px; }
 .legend-line.down { border-color: #ff4d5e; border-top-width: 2px; }
 .legend-flow { color: #4df0ff; font-size: 12px; letter-spacing: -1px; }
 .flow-popup { position: absolute; z-index: 20; width: 300px; background: rgba(11,19,36,.97); border: 1px solid #2a4a7a; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 12px; color: #dce9ff; backdrop-filter: blur(8px); }

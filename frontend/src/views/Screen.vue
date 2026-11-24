@@ -87,7 +87,7 @@ function buildGraph() {
   const edges = topology.value.edges
     .filter((e) => nodeIps.has(e.source) && nodeIps.has(e.target))
     .map((e) => ({
-      ...e, type: 'h3c-flow-edge', style: FLOW_EDGE_STYLE(e.status)
+      ...e, type: 'h3c-flow-edge', style: FLOW_EDGE_STYLE(e.status, e.trafficLevel)
     }));
   const g = new G6.Graph({
     container: graphRef.value,
@@ -238,7 +238,10 @@ watch(() => store.seq, () => {
             <span v-for="item in legendItems" :key="item.label"><i :style="{ background: item.color }" />{{ item.label }}</span>
             <span><i style="background:#ff4d5e" />告警</span>
             <span><i style="background:#64748b" />离线</span>
-            <span><i style="background:transparent;border-top:1px dashed #3a7fd5;height:0;border-radius:0" />链路数据流动</span>
+            <span><i style="background:transparent;border-top:2px dashed #3a7fd5;height:0;border-radius:0" />正常链路</span>
+            <span><i style="background:transparent;border-top:2px dashed #ffb020;height:0;border-radius:0" />高负载</span>
+            <span><i style="background:transparent;border-top:3px dashed #ff4d5e;height:0;border-radius:0" />拥塞</span>
+            <span><i style="background:transparent;border-top:1px dashed #3a7fd5;height:0;border-radius:0" />数据流动</span>
           </div>
         </div>
         <div ref="graphRef" class="screen-graph" />

@@ -46,7 +46,7 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
     const data = getDeviceDetail(Number(req.params.id));
     return data ? ok(res, data) : fail(res, '设备不存在', 404);
   });
-  router.get('/topology', (_req, res) => ok(res, getTopology()));
+  router.get('/topology', (_req, res) => ok(res, getTopology(configHolder.current)));
   router.get('/layouts', (_req, res) => ok(res, listLayouts()));
   router.get('/layouts/active', (_req, res) => ok(res, getActiveLayout()));
   router.post('/layouts', (req, res) => {
