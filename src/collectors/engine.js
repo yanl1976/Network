@@ -1,4 +1,4 @@
-import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries, listMacEntries, getPortAlertCandidates } from '../db.js';
+import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries, listMacEntries, getPortAlertCandidates, escalateStaleAlerts } from '../db.js';
 import { collectSnmp, normalizeMac, lookupMacOnDevice, collectMacTable } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
@@ -106,10 +106,12 @@ export async function pollOnce(config) {
   }));
 
   const changes = results.map((r) => r.status === 'fulfilled' ? r.value : { ok: false });
+  const escalated = escalateStaleAlerts(config.poll?.thresholds?.alertEscalateHours ?? 24);
   return {
     mode: 'live', scanned: changes.length,
     online: changes.filter((c) => c.ok).length,
     offline: changes.filter((c) => !c.ok).length,
+    escalated,
     changes
   };
 }

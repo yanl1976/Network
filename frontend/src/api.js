@@ -21,6 +21,8 @@ export const api = {
   alerts: (activeOnly = false) => request(`/alerts${activeOnly ? '?active=1' : ''}`),
   resolveAlert: (id) => request(`/alerts/${id}/resolve`, { method: 'POST' }),
   resolveAllAlerts: () => request('/alerts/resolve-all', { method: 'POST' }),
+  ackAlert: (id, assignee) => request(`/alerts/${id}/ack`, { method: 'POST', body: JSON.stringify({ assignee }) }),
+  addAlertNote: (id, author, text) => request(`/alerts/${id}/note`, { method: 'POST', body: JSON.stringify({ author, text }) }),
   configs: (deviceId) => request(`/configs/${deviceId}`),
   configContent: (id) => request(`/configs/content/${id}`),
   configDiff: (oldId, newId) => request(`/configs/diff?oldId=${oldId}&newId=${newId}`),

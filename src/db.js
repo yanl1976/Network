@@ -74,6 +74,10 @@ CREATE TABLE IF NOT EXISTS alerts (
   message TEXT,
   value TEXT,
   active INTEGER DEFAULT 1,
+  status TEXT DEFAULT 'active',
+  assignee TEXT,
+  notes TEXT,
+  acknowledged_at TEXT,
   created_at TEXT,
   resolved_at TEXT
 );
@@ -143,6 +147,14 @@ if (!ifColumns.includes('ever_up')) {
   // 迁移：当前 UP 的端口视为"曾 UP"，历史 DOWN 端口保持 0（未启用），避免一次性刷出大量假告警
   db.exec('UPDATE interfaces SET ever_up=1 WHERE oper_status=1');
 }
+const alertColumns = db.prepare('PRAGMA table_info(alerts)').all().map((c) => c.name);
+if (!alertColumns.includes('status')) {
+  db.exec("ALTER TABLE alerts ADD COLUMN status TEXT DEFAULT 'active'");
+  db.exec('UPDATE alerts SET status=CASE WHEN active=1 THEN \'active\' ELSE \'resolved\' END');
+}
+if (!alertColumns.includes('assignee')) db.exec('ALTER TABLE alerts ADD COLUMN assignee TEXT');
+if (!alertColumns.includes('notes')) db.exec('ALTER TABLE alerts ADD COLUMN notes TEXT');
+if (!alertColumns.includes('acknowledged_at')) db.exec('ALTER TABLE alerts ADD COLUMN acknowledged_at TEXT');
 
 const now = () => new Date().toISOString();
 
@@ -209,19 +221,51 @@ export function addMetric(deviceId, cpu, memory, inTraffic = 0, outTraffic = 0) 
 }
 
 export function raiseAlert({ deviceId, deviceIp, severity, type, message, value }) {
-  const active = db.prepare('SELECT id FROM alerts WHERE device_id=? AND type=? AND active=1').get(deviceId, type);
+  const active = db.prepare("SELECT id FROM alerts WHERE device_id=? AND type=? AND active=1 AND status!='resolved'").get(deviceId, type);
   if (active) {
-    db.prepare('UPDATE alerts SET severity=?, message=?, value=?, created_at=? WHERE id=?')
+    db.prepare("UPDATE alerts SET severity=?, message=?, value=?, created_at=?, status='active' WHERE id=?")
       .run(severity, message, value ?? null, now(), active.id);
     return { id: active.id, created: false };
   }
-  const result = db.prepare(`INSERT INTO alerts (device_id, device_ip, severity, type, message, value, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`)
+  const result = db.prepare(`INSERT INTO alerts (device_id, device_ip, severity, type, message, value, active, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 'active', ?)`)
     .run(deviceId, deviceIp, severity, type, message, value ?? null, now());
   return { id: Number(result.lastInsertRowid), created: true };
 }
 
 export function resolveAlert(type, deviceId) {
-  db.prepare('UPDATE alerts SET active=0, resolved_at=? WHERE device_id=? AND type=? AND active=1').run(now(), deviceId, type);
+  db.prepare("UPDATE alerts SET active=0, status='resolved', resolved_at=? WHERE device_id=? AND type=? AND status!='resolved'").run(now(), deviceId, type);
+}
+
+export function acknowledgeAlert(id, assignee) {
+  const row = db.prepare('SELECT id, notes FROM alerts WHERE id=?').get(id);
+  if (!row) return null;
+  const ts = now();
+  db.prepare("UPDATE alerts SET status='acknowledged', assignee=?, acknowledged_at=COALESCE(acknowledged_at, ?) WHERE id=?")
+    .run(String(assignee || '未知').trim(), ts, id);
+  return { id, status: 'acknowledged', assignee: String(assignee || '未知').trim() };
+}
+
+export function addAlertNote(id, author, text) {
+  const row = db.prepare('SELECT notes FROM alerts WHERE id=?').get(id);
+  if (!row) return null;
+  let notes = [];
+  try { notes = JSON.parse(row.notes || '[]'); } catch { notes = []; }
+  notes.push({ at: now(), author: String(author || '未知').trim(), text: String(text || '').trim() });
+  db.prepare('UPDATE alerts SET notes=? WHERE id=?').run(JSON.stringify(notes), id);
+  return { id, notes };
+}
+
+export function resolveAlertById(id) {
+  db.prepare("UPDATE alerts SET active=0, status='resolved', resolved_at=? WHERE id=?").run(now(), id);
+  return { id, resolved: true };
+}
+
+export function escalateStaleAlerts(hours = 24) {
+  const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+  const rows = db.prepare("SELECT id FROM alerts WHERE active=1 AND status='active' AND severity='warning' AND created_at<?").all(cutoff);
+  const tx = db.transaction((ids) => ids.forEach((id) => db.prepare("UPDATE alerts SET severity='critical', message=message||' [超时升级]' WHERE id=?").run(id)));
+  tx(rows.map((r) => r.id));
+  return rows.length;
 }
 
 const parsePositions = (row) => row ? { ...row, positions: JSON.parse(row.positions || '{}') } : null;

@@ -26,7 +26,10 @@ async function load() {
   draft.value = JSON.parse(JSON.stringify(config.value));
   draft.value.scan.ports = (config.value.scan.ports || []).join(', ');
   draft.value.branding = { ...defaultBranding, ...(config.value.branding || {}) };
-  if (draft.value.poll?.thresholds && draft.value.poll.thresholds.portUtilWarn == null) draft.value.poll.thresholds.portUtilWarn = 80;
+  if (draft.value.poll?.thresholds) {
+    if (draft.value.poll.thresholds.portUtilWarn == null) draft.value.poll.thresholds.portUtilWarn = 80;
+    if (draft.value.poll.thresholds.alertEscalateHours == null) draft.value.poll.thresholds.alertEscalateHours = 24;
+  }
 }
 
 function addSubnet() {
@@ -190,6 +193,7 @@ onMounted(load);
           <el-form-item label="内存警告(%)"><el-input-number v-model="draft.poll.thresholds.memWarn" :min="1" :max="100" /></el-form-item>
           <el-form-item label="内存严重(%)"><el-input-number v-model="draft.poll.thresholds.memCritical" :min="1" :max="100" /></el-form-item>
           <el-form-item label="端口流量警告(%)"><el-input-number v-model="draft.poll.thresholds.portUtilWarn" :min="1" :max="100" /></el-form-item>
+          <el-form-item label="告警超时升级(h)"><el-input-number v-model="draft.poll.thresholds.alertEscalateHours" :min="1" :max="720" /></el-form-item>
         </el-form>
         <div class="hint">阈值变更后需等待下一次轮询生效</div>
       </div>

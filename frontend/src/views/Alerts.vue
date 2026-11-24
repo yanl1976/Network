@@ -10,6 +10,10 @@ const severityFilter = ref('');
 const typeFilter = ref('');
 const activeOnly = ref(true);
 const loading = ref(false);
+const noteDialog = ref(false);
+const noteTarget = ref(null);
+const noteText = ref('');
+const assignee = ref('运维');
 
 const typeLabels = { offline: '设备失联', cpu_high: 'CPU 过高', memory_high: '内存过高', port_down: '端口中断', port_traffic_high: '端口流量异常' };
 const filtered = computed(() => alerts.value.filter((a) =>
@@ -41,11 +45,41 @@ async function resolveAll() {
   await load();
 }
 
+async function acknowledge(id) {
+  await api.ackAlert(id, assignee.value);
+  ElMessage.success('已认领告警');
+  await load();
+}
+
+function openNote(row) {
+  noteTarget.value = row;
+  noteText.value = '';
+  noteDialog.value = true;
+}
+
+async function submitNote() {
+  if (!noteTarget.value || !noteText.value.trim()) return;
+  await api.addAlertNote(noteTarget.value.id, assignee.value, noteText.value);
+  ElMessage.success('备注已添加');
+  noteDialog.value = false;
+  await load();
+}
+
+function statusLabel(row) {
+  if (row.status === 'acknowledged') return '处理中';
+  if (row.status === 'resolved' || row.active === 0) return '已恢复';
+  return '活动中';
+}
+
+function notesOf(row) {
+  try { return JSON.parse(row.notes || '[]'); } catch { return []; }
+}
+
 function severityType(s) { return s === 'critical' ? 'danger' : s === 'warning' ? 'warning' : 'info'; }
 function formatTime(ts) { return ts ? String(ts).replace('T', ' ').slice(0, 19) : '-'; }
 
 onMounted(load);
-watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
+watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'alert:updated', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
 </script>
 
 <template>
@@ -84,13 +118,41 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-table-column prop="message" label="告警内容" min-width="230" />
         <el-table-column prop="value" label="当前值" width="90" />
         <el-table-column label="触发时间" width="160"><template #default="{ row }"><span class="muted">{{ formatTime(row.created_at) }}</span></template></el-table-column>
-        <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.active ? 'danger' : 'success'" size="small" effect="plain">{{ row.active ? '活动中' : '已恢复' }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="86" fixed="right"><template #default="{ row }"><el-button v-if="row.active" link type="primary" size="small" @click="resolve(row.id)">解决</el-button><span v-else class="muted">-</span></template></el-table-column>
+        <el-table-column label="处理状态" width="110"><template #default="{ row }">
+          <el-tag :type="row.status === 'resolved' || row.active === 0 ? 'success' : row.status === 'acknowledged' ? 'warning' : 'danger'" size="small" effect="plain">{{ statusLabel(row) }}</el-tag>
+          <div v-if="row.assignee" class="muted" style="font-size:10px">{{ row.assignee }}</div>
+        </template></el-table-column>
+        <el-table-column label="操作" width="150" fixed="right"><template #default="{ row }">
+          <el-button v-if="row.active && row.status === 'active'" link type="warning" size="small" @click="acknowledge(row.id)">认领</el-button>
+          <el-button link type="info" size="small" @click="openNote(row)">备注</el-button>
+          <el-button v-if="row.active" link type="primary" size="small" @click="resolve(row.id)">解决</el-button>
+        </template></el-table-column>
       </el-table>
     </div>
+
+    <el-dialog v-model="noteDialog" title="告警处理备注" width="520px">
+      <div v-if="noteTarget">
+        <div class="note-meta">设备：{{ noteTarget.device_name }} · {{ typeLabels[noteTarget.type] || noteTarget.type }} · {{ noteTarget.message }}</div>
+        <div v-if="notesOf(noteTarget).length" class="note-list">
+          <div v-for="(n, i) in notesOf(noteTarget)" :key="i" class="note-item">
+            <span class="muted">{{ formatTime(n.at) }} {{ n.author }}</span>
+            <div>{{ n.text }}</div>
+          </div>
+        </div>
+        <el-input v-model="noteText" type="textarea" :rows="3" placeholder="填写处理记录，如：已通知网络组，计划今晚更换模块" />
+      </div>
+      <template #footer>
+        <el-button @click="noteDialog = false">取消</el-button>
+        <el-button type="primary" @click="submitNote">添加备注</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .filter-bar { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.note-meta { font-size: 12px; color: #9fb4d6; margin-bottom: 10px; padding: 8px 10px; background: rgba(30,51,85,.45); border-radius: 5px; }
+.note-list { max-height: 220px; overflow: auto; margin-bottom: 10px; }
+.note-item { font-size: 12px; padding: 6px 8px; border-left: 2px solid var(--primary); margin-bottom: 6px; background: rgba(20,33,58,.6); border-radius: 3px; }
+.note-item .muted { font-size: 10px; }
 </style>

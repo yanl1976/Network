@@ -1,6 +1,6 @@
 import express from 'express';
 import { loadConfig, updateSettings, publicConfig, getManagedDevices, addDevice, updateDevice, removeDevice } from '../config.js';
-import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout, listMacEntries, countMacEntries } from '../db.js';
+import { db, listLayouts, getActiveLayout, saveLayout, deleteLayout, activateLayout, listMacEntries, countMacEntries, acknowledgeAlert, addAlertNote, resolveAlertById } from '../db.js';
 import { pollOnce, scanOnce, backupConfigs, lookupMac, collectAllMacTables } from '../collectors/engine.js';
 import { checkPorts } from '../collectors/network.js';
 import { seedDemo } from '../collectors/demo.js';
@@ -58,12 +58,23 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   router.delete('/layouts/:id', (req, res) => ok(res, { deleted: deleteLayout(Number(req.params.id)) }));
   router.get('/alerts', (req, res) => ok(res, getAlerts(req.query.active === '1')));
   router.post('/alerts/:id/resolve', (req, res) => {
-    db.prepare('UPDATE alerts SET active=0, resolved_at=? WHERE id=?').run(new Date().toISOString(), Number(req.params.id));
+    const result = resolveAlertById(Number(req.params.id));
     broadcast({ type: 'alert:resolved', id: Number(req.params.id) });
-    return ok(res, { resolved: true });
+    return ok(res, result);
+  });
+  router.post('/alerts/:id/ack', (req, res) => {
+    const result = acknowledgeAlert(Number(req.params.id), req.body?.assignee);
+    if (!result) return fail(res, '告警不存在', 404);
+    broadcast({ type: 'alert:updated', id: Number(req.params.id) });
+    return ok(res, result);
+  });
+  router.post('/alerts/:id/note', (req, res) => {
+    const result = addAlertNote(Number(req.params.id), req.body?.author, req.body?.text);
+    if (!result) return fail(res, '告警不存在', 404);
+    return ok(res, result);
   });
   router.post('/alerts/resolve-all', (_req, res) => {
-    db.prepare('UPDATE alerts SET active=0, resolved_at=? WHERE active=1').run(new Date().toISOString());
+    db.prepare("UPDATE alerts SET active=0, status='resolved', resolved_at=? WHERE active=1").run(new Date().toISOString());
     broadcast({ type: 'alert:resolvedAll' });
     return ok(res, { resolved: true });
   });

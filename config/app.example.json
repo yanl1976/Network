@@ -32,6 +32,7 @@
       "memWarn": 75,
       "memCritical": 90,
       "portUtilWarn": 80,
+      "alertEscalateHours": 24,
       "offlineAfterSec": 180
     }
   },
