@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
-import { store, refreshOverview, refreshBranding } from '../store.js';
+import { store, refreshOverview, refreshBranding, applyPageTitle } from '../store.js';
 
 const config = ref(null);
 const draft = ref({});
@@ -17,7 +17,8 @@ const defaultBranding = {
   screenTitle: 'H3C 网络设备动态拓扑监控中心',
   screenSubtitle: 'NETWORK TOPOLOGY & MONITORING CENTER',
   sidebarTitle: '网络拓扑监控',
-  sidebarSubtitle: 'H3C NETWORK MONITOR'
+  sidebarSubtitle: 'H3C NETWORK MONITOR',
+  pageTitle: ''
 };
 
 async function load() {
@@ -50,6 +51,7 @@ async function save() {
     draft.value.branding = { ...defaultBranding, ...(next.branding || {}) };
     await refreshOverview();
     await refreshBranding();
+    applyPageTitle();
     ElMessage.success('系统设置已保存');
   } finally { saving.value = false; }
 }
@@ -120,10 +122,11 @@ onMounted(load);
         <el-form label-width="96px" size="small">
           <el-form-item label="侧栏标题"><el-input v-model="draft.branding.sidebarTitle" maxlength="30" placeholder="网络拓扑监控" /></el-form-item>
           <el-form-item label="侧栏副标题"><el-input v-model="draft.branding.sidebarSubtitle" maxlength="40" placeholder="H3C NETWORK MONITOR" /></el-form-item>
+          <el-form-item label="网页标题"><el-input v-model="draft.branding.pageTitle" maxlength="50" placeholder="留空则同侧栏标题" /></el-form-item>
           <el-form-item label="大屏标题"><el-input v-model="draft.branding.screenTitle" maxlength="50" placeholder="H3C 网络设备动态拓扑监控中心" /></el-form-item>
           <el-form-item label="大屏副标题"><el-input v-model="draft.branding.screenSubtitle" maxlength="60" placeholder="NETWORK TOPOLOGY & MONITORING CENTER" /></el-form-item>
         </el-form>
-        <div class="hint">分别控制左侧菜单顶部品牌区与「全屏展示」大屏的标题文字，保存后立即生效。</div>
+        <div class="hint">控制侧栏品牌区、「全屏展示」大屏与浏览器标签标题（网页标题留空则同侧栏标题），保存后立即生效。</div>
       </div>
 
       <div class="panel settings-card">

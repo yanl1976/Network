@@ -11,7 +11,8 @@ export const store = reactive({
     screenTitle: 'H3C 网络设备动态拓扑监控中心',
     screenSubtitle: 'NETWORK TOPOLOGY & MONITORING CENTER',
     sidebarTitle: '网络拓扑监控',
-    sidebarSubtitle: 'H3C NETWORK MONITOR'
+    sidebarSubtitle: 'H3C NETWORK MONITOR',
+    pageTitle: ''
   }
 });
 
@@ -26,9 +27,14 @@ export async function refreshOverview() {
   } catch { /* ignore */ }
 }
 
+export function applyPageTitle() {
+  document.title = store.branding.pageTitle || store.branding.sidebarTitle || '网络拓扑监控';
+}
+
 export async function refreshBranding() {
   try {
     const settings = await api.settings();
     if (settings?.branding) Object.assign(store.branding, settings.branding);
+    applyPageTitle();
   } catch { /* ignore */ }
 }
