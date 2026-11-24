@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { Search, Refresh, Document } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
@@ -22,6 +22,7 @@ const editDialog = ref(false);
 const editing = ref(false);
 const form = ref({});
 const router = useRouter();
+const route = useRoute();
 const macQuery = ref('');
 const macLoading = ref(false);
 const macResult = ref(null);
@@ -194,7 +195,15 @@ function statusTag(status) {
   return type;
 }
 
-onMounted(() => { load(); loadManaged(); });
+onMounted(async () => {
+  await load();
+  loadManaged();
+  const targetIp = route.query.ip;
+  if (targetIp) {
+    const row = devices.value.find((d) => d.ip === String(targetIp));
+    if (row) await openDetail(row);
+  }
+});
 watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'data:reset', 'mode:changed', 'devices:changed'].includes(store.event?.type)) { load(); loadManaged(); } });
 </script>
 

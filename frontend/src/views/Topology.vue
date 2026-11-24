@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import G6 from '@antv/g6';
 import * as echarts from 'echarts';
 import { Refresh, RefreshRight, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue';
@@ -24,6 +24,7 @@ const roleLabels = { core: '核心交换机', aggregation: '汇聚交换机', ac
 const statusLabels = { online: '在线', warning: '告警', critical: '严重', offline: '离线' };
 
 const route = useRoute();
+const router = useRouter();
 const containerRef = ref(null);
 const chartRef = ref(null);
 const flowChartRef = ref(null);
@@ -352,6 +353,11 @@ async function backupSelected() {
   if (detail.value) detail.value.configs = await api.configs(detail.value.id);
 }
 
+function openInDevices() {
+  if (!selectedIp.value) return;
+  router.push({ path: '/devices', query: { ip: selectedIp.value } });
+}
+
 onMounted(async () => {
   await loadData(true);
   const targetIp = route.query.ip;
@@ -454,10 +460,9 @@ watch(() => store.seq, () => {
               <el-tag size="small" :type="detail.status === 'online' ? 'success' : detail.status === 'offline' ? 'info' : 'danger'" effect="dark">{{ statusLabels[detail.status] || detail.status }}</el-tag>
             </div>
           </div>
-          <div class="detail-meta">
-            <div><span class="muted">型号</span><span>{{ detail.model }}</span></div>
-            <div><span class="muted">位置</span><span>{{ detail.location }}</span></div>
-            <div><span class="muted">运行时间</span><span>{{ detail.uptime }}</span></div>
+          <div class="detail-summary-line">
+            {{ detail.model || '-' }}<span v-if="detail.location"> · {{ detail.location }}</span>
+            <span v-if="detail.uptime"> · 运行 {{ detail.uptime }}</span>
           </div>
           <div class="gauges">
             <div class="gauge">
@@ -487,47 +492,27 @@ watch(() => store.seq, () => {
             </div>
             <div ref="sideFlowChartRef" class="chart side-flow-chart" />
           </div>
-          <div class="detail-section">
-            <div class="mini-title">端口状态 <span class="muted">({{ detail.interfaces?.length || 0 }} 口)</span></div>
-            <div class="port-grid">
-              <div v-for="port in (detail.interfaces || []).slice(0, 12)" :key="port.if_index" class="port-item" :class="{ down: port.oper_status === 2 }">
-                <span class="port-name">{{ port.if_name }}</span>
-                <span class="port-dot" :class="port.oper_status === 1 ? 'up' : 'down'" />
-              </div>
+          <div class="detail-badges">
+            <div class="detail-badge">
+              <span class="badge-label">端口</span>
+              <b>{{ detail.portStats?.total ?? (detail.interfaces?.length || 0) }}</b>
+              <span class="badge-sub up">UP {{ detail.portStats?.up ?? (detail.interfaces || []).filter(p => p.oper_status === 1).length }}</span>
+              <span class="badge-sub down">DOWN {{ detail.portStats?.down ?? (detail.interfaces || []).filter(p => p.oper_status === 2).length }}</span>
             </div>
-          </div>
-          <div class="detail-section">
-            <div class="mini-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
-            <div v-if="!(detail.links || []).length" class="muted" style="font-size:12px">暂无链路数据</div>
-            <div v-for="link in (detail.links || [])" :key="link.id" class="link-item" :class="{ 'link-unknown': !link.known }">
-              <div class="link-peer">
-                <span class="port-dot" :class="link.status === 'up' ? 'up' : link.status === 'down' ? 'down' : ''" />
-                <b>{{ link.peerName || link.peerIp || '未知设备' }}</b>
-                <span class="muted mono">{{ link.peerIp }}</span>
-              </div>
-              <div class="link-ports mono">
-                <span>本端 {{ link.localPort || '-' }}</span>
-                <span class="link-arrow">→</span>
-                <span>对端 {{ link.remotePort || '-' }}</span>
-              </div>
-              <div class="link-meta muted">
-                {{ link.known ? ({ core: '核心', aggregation: '汇聚', access: '接入', border: '边界', server: '服务器' }[link.peerRole] || link.peerRole) : '未识别邻居' }}
-                <span v-if="link.bandwidth"> · {{ link.bandwidth }}</span>
-                <span> · {{ link.direction === 'out' ? '主动发现' : '被动发现' }}</span>
-                <span> · {{ link.status === 'up' ? '正常' : link.status === 'down' ? '中断' : '未知' }}</span>
-              </div>
+            <div class="detail-badge">
+              <span class="badge-label">链路</span>
+              <b>{{ (detail.links || []).length }}</b>
+              <span class="badge-sub">已知 {{ (detail.links || []).filter(l => l.known).length }}</span>
             </div>
-          </div>
-          <div class="detail-section">
-            <div class="mini-title">当前告警 <span class="muted">({{ (detail.alerts || []).filter(a => a.active).length }})</span></div>
-            <div v-if="!(detail.alerts || []).some(a => a.active)" class="muted" style="font-size:12px">无活动告警</div>
-            <div v-for="alert in (detail.alerts || []).filter(a => a.active)" :key="alert.id" class="detail-alert">
-              <span class="status-dot" :class="alert.severity === 'critical' ? 'status-critical' : 'status-warning'" />
-              {{ alert.message }} <b>{{ alert.value }}</b>
+            <div class="detail-badge">
+              <span class="badge-label">告警</span>
+              <b :class="(detail.alerts || []).filter(a => a.active).length ? 'danger-text' : ''">{{ (detail.alerts || []).filter(a => a.active).length }}</b>
+              <span class="badge-sub">活动告警</span>
             </div>
           </div>
           <div class="detail-actions">
-            <el-button size="small" type="primary" plain @click="backupSelected">备份配置</el-button>
+            <el-button size="small" type="primary" @click="openInDevices">在设备清单中查看</el-button>
+            <el-button size="small" plain @click="backupSelected">备份配置</el-button>
             <el-button size="small" plain @click="selectedIp = null; detail = null">关闭详情</el-button>
           </div>
         </template>
@@ -600,8 +585,15 @@ watch(() => store.seq, () => {
 .detail-name { font-size: 17px; font-weight: 700; }
 .detail-ip { color: var(--muted); font-size: 12px; margin-top: 3px; }
 .detail-tags { display: flex; gap: 6px; margin-top: 9px; }
-.detail-meta { padding: 10px 16px; display: grid; gap: 6px; font-size: 12px; }
-.detail-meta > div { display: flex; justify-content: space-between; gap: 10px; }
+.detail-summary-line { padding: 0 16px 8px; font-size: 11px; color: #9fb4d6; line-height: 1.5; }
+.detail-badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.detail-badge { background: rgba(30,51,85,.45); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.detail-badge .badge-label { display: block; font-size: 10px; color: var(--muted); }
+.detail-badge b { display: block; font-size: 20px; line-height: 1.2; margin: 2px 0; }
+.detail-badge .badge-sub { display: block; font-size: 10px; color: var(--muted); }
+.detail-badge .badge-sub.up { color: var(--success); }
+.detail-badge .badge-sub.down { color: var(--danger); }
+.danger-text { color: var(--danger); }
 .gauges { padding: 6px 16px 10px; display: grid; gap: 10px; }
 .gauge-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .gauge-label b { color: var(--text); }
@@ -617,22 +609,10 @@ watch(() => store.seq, () => {
 .detail-traffic-item small { font-size: 10px; font-weight: 400; color: var(--muted); }
 .side-flow-chart { height: 120px; }
 .detail-section { padding: 8px 16px; border-top: 1px solid var(--border); }
-.port-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.port-item { display: flex; align-items: center; justify-content: space-between; background: rgba(20,33,58,.7); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 10px; }
-.port-item.down { opacity: .5; }
-.port-name { font-family: Consolas, monospace; color: #9fb4d6; }
 .port-dot { width: 6px; height: 6px; border-radius: 50%; }
 .port-dot.up { background: var(--success); }
 .port-dot.down { background: var(--danger); }
-.detail-alert { font-size: 11px; color: #ffc4c9; margin: 5px 0; display: flex; align-items: center; }
-.link-item { border: 1px solid var(--border); border-radius: 5px; background: rgba(20,33,58,.6); padding: 6px 8px; margin: 5px 0; font-size: 11px; }
-.link-item.link-unknown { opacity: .6; }
-.link-peer { display: flex; align-items: center; gap: 6px; color: #d6e4f7; }
-.link-peer .port-dot { flex: 0 0 auto; }
-.link-ports { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: #9fb4d6; font-size: 10px; }
-.link-arrow { color: var(--primary); }
-.link-meta { font-size: 10px; margin-top: 3px; }
-.detail-actions { padding: 10px 16px; margin-top: auto; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.detail-actions { padding: 10px 16px; margin-top: auto; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
 .device-strip { flex: 0 0 132px; }
 .device-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; overflow: auto; }
 .device-chip { display: flex; align-items: center; gap: 6px; background: rgba(20,33,58,.8); border: 1px solid var(--border); color: #a9bfe0; border-radius: 5px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
