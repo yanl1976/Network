@@ -16,10 +16,30 @@ function portKey(name) {
   return String(name ?? '').match(/(\d+(?:\/\d+)+)/)?.[1] || '';
 }
 
-// IRF 成员号 / 框式槽位号：取端口名前缀后的第一段数字（GE1/0/1 -> 1, XGE2/0/1 -> 2）
-function unitOf(name) {
-  const m = String(name ?? '').match(/^(?:100GE|25GE|40GE|XGE|TGE|GE|FE|CE|GigabitEthernet|Ten-GigabitEthernet|TwentyfiveGigE|FortyGigE|HundredGigE|FastEthernet|Ethernet|Eth)\s*(\d+)/i);
-  return m ? Number(m[1]) : null;
+// 端口名结构化解析：兼容三段式(GE1/0/1)与四段式(GigabitEthernet1/0/0/1)
+// 四段: 成员/机框/槽/口；三段: 成员/槽/口(机框=0)；两段: 成员/口
+const PORT_KINDS = [
+  { re: /^(?:HundredGigE|100GE)$/i, kind: '100GE', label: '100G口' },
+  { re: /^(?:FortyGigE|40GE)$/i, kind: '40GE', label: '40G口' },
+  { re: /^(?:TwentyfiveGigE|25GE)$/i, kind: '25GE', label: '25G口' },
+  { re: /^(?:Ten-GigabitEthernet|XGE|TGE)$/i, kind: '10GE', label: '万兆口' },
+  { re: /^(?:GigabitEthernet|GE)$/i, kind: 'GE', label: '千兆口' },
+  { re: /^(?:FastEthernet|FE)$/i, kind: 'FE', label: '百兆口' },
+  { re: /^(?:Ethernet|Eth|CE)$/i, kind: 'ETH', label: '以太网口' }
+];
+const PORT_NAME_RE = /^(100GE|25GE|40GE|XGE|TGE|GE|FE|CE|GigabitEthernet|Ten-GigabitEthernet|TwentyfiveGigE|FortyGigE|HundredGigE|FastEthernet|Ethernet|Eth)\s*((?:\d+\/)*\d+)/i;
+
+function parsePortName(name) {
+  const m = String(name ?? '').trim().match(PORT_NAME_RE);
+  if (!m) return null;
+  const nums = m[2].split('/').map(Number);
+  let unit, chassis, slot, port;
+  if (nums.length >= 4) [unit, chassis, slot, port] = nums;
+  else if (nums.length === 3) { [unit, slot, port] = nums; chassis = 0; }
+  else if (nums.length === 2) { [unit, port] = nums; chassis = 0; slot = 0; }
+  else { unit = nums[0]; chassis = 0; slot = 0; port = 0; }
+  const kind = PORT_KINDS.find((k) => k.re.test(m[1])) || PORT_KINDS[PORT_KINDS.length - 1];
+  return { unit, chassis, slot, port, kind: kind.kind, kindLabel: kind.label, segments: nums.length };
 }
 
 function deviceTypeOf(row) {
@@ -110,27 +130,42 @@ export function getDeviceDetail(id) {
     };
   });
   const uplinkKeys = new Set(links.filter((l) => l.direction === 'out').map((l) => portKey(l.localPort)).filter(Boolean));
-  const physicalInterfaces = interfaces.map((i) => ({
-    ...i,
-    unit: unitOf(i.if_name) ?? 0,
-    uplink: uplinkKeys.has(portKey(i.if_name))
-  }));
+  const physicalInterfaces = interfaces.map((i) => {
+    const p = parsePortName(i.if_name) || { unit: 0, chassis: 0, slot: 0, port: 0, kind: 'ETH', kindLabel: '以太网口', segments: 0 };
+    return { ...i, ...p, uplink: uplinkKeys.has(portKey(i.if_name)) };
+  });
   const unitMap = new Map();
+  const groupMap = new Map();
   for (const i of physicalInterfaces) {
     if (!unitMap.has(i.unit)) unitMap.set(i.unit, { unit: i.unit, total: 0, up: 0, down: 0 });
-    const stat = unitMap.get(i.unit);
-    stat.total++;
-    if (i.oper_status === 1) stat.up++; else stat.down++;
+    const us = unitMap.get(i.unit);
+    us.total++;
+    if (i.oper_status === 1) us.up++; else us.down++;
+    const key = `${i.unit}/${i.chassis}/${i.kind}`;
+    if (!groupMap.has(key)) groupMap.set(key, {
+      key, unit: i.unit, chassis: i.chassis, kind: i.kind, kindLabel: i.kindLabel,
+      total: 0, up: 0, down: 0
+    });
+    const gs = groupMap.get(key);
+    gs.total++;
+    if (i.oper_status === 1) gs.up++; else gs.down++;
   }
   const portUnits = [...unitMap.values()].sort((a, b) => a.unit - b.unit);
+  const portGroups = [...groupMap.values()].sort((a, b) =>
+    a.unit - b.unit || a.chassis - b.chassis || a.kind.localeCompare(b.kind));
   const portStats = {
     total: interfaces.length,
     up: interfaces.filter((i) => i.oper_status === 1).length,
     down: interfaces.filter((i) => i.oper_status !== 1).length,
     hidden: allInterfaces.length - interfaces.length,
-    units: portUnits.length
+    units: portUnits.length,
+    chassis: new Set(physicalInterfaces.map((i) => i.chassis)).size,
+    stackMode: physicalInterfaces.some((i) => i.segments >= 4) && portUnits.length > 1
   };
-  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces: physicalInterfaces, portStats, portUnits, metrics, alerts, configs, links };
+  return {
+    ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role,
+    interfaces: physicalInterfaces, portStats, portUnits, portGroups, metrics, alerts, configs, links
+  };
 }
 
 const ROLE_RANK = { core: 5, aggregation: 4, border: 3, access: 2, server: 1 };

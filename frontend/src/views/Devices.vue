@@ -30,17 +30,32 @@ const selectedPort = ref(null);
 const unitGroup = ref(true);
 
 const portPanels = computed(() => {
-  const list = detail.value?.interfaces || [];
-  const units = detail.value?.portUnits || [];
-  if (!unitGroup.value || units.length < 2) {
-    return [{ unit: null, label: '', stats: detail.value?.portStats, ports: list }];
+  const d = detail.value;
+  const list = d?.interfaces || [];
+  const units = d?.portUnits || [];
+  const groups = d?.portGroups || [];
+  const memberLabel = d?.portStats?.stackMode ? '成员' : '单元';
+  const makePanel = (key, label, stats, groupList) => ({
+    key, label, stats,
+    blocks: groupList.map((g) => ({
+      key: g.key,
+      label: `${g.chassis ? `机框${g.chassis} · ` : ''}${g.kindLabel}`,
+      stats: g,
+      ports: list.filter((p) => `${p.unit}/${p.chassis}/${p.kind}` === g.key)
+    }))
+  });
+  if (!unitGroup.value) {
+    return [makePanel('all', '', d?.portStats, [{ key: 'all', label: '', total: list.length, up: list.filter((p) => p.oper_status === 1).length, down: list.filter((p) => p.oper_status !== 1).length }])];
   }
-  return units.map((u) => ({
-    unit: u.unit,
-    label: `单元 ${u.unit}`,
-    stats: u,
-    ports: list.filter((p) => (p.unit ?? 0) === u.unit)
-  }));
+  if (units.length < 2) {
+    return [makePanel('all', '', d?.portStats, groups)];
+  }
+  return units.map((u) => makePanel(
+    u.unit,
+    `${memberLabel} ${u.unit}`,
+    u,
+    groups.filter((g) => g.unit === u.unit)
+  ));
 });
 
 const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
@@ -49,8 +64,10 @@ function formatSpeed(bps) {
   if (!bps) return '-';
   return bps >= 1e9 ? (bps / 1e9) + ' Gbps' : (bps / 1e6) + ' Mbps';
 }
-function shortPortName(name = '') {
-  return String(name).match(/\d+(?:\/\d+)*/)?.[0] || String(name).slice(-4);
+function shortPortName(p) {
+  if (p && typeof p === 'object') return `${p.slot ?? 0}/${p.port ?? 0}`;
+  const segs = String(p ?? '').match(/\d+(?:\/\d+)*/)?.[0]?.split('/') || [];
+  return segs.slice(-2).join('/') || String(p ?? '').slice(-4);
 }
 function portKey(name = '') {
   return String(name).match(/(\d+(?:\/\d+)+)/)?.[1] || '';
@@ -285,27 +302,33 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
           </div>
           <template v-if="portView === 'panel'">
             <div v-if="!detail.interfaces?.length" class="muted" style="font-size:12px;padding:16px 0">该设备暂无物理端口数据</div>
-            <div v-for="panel in portPanels" :key="panel.unit ?? 'all'" class="switch-panel">
+            <div v-for="panel in portPanels" :key="panel.key" class="switch-panel">
               <div class="switch-panel-head">
                 <span class="switch-panel-model">{{ panel.label || (detail.model || '交换机') }}</span>
                 <span class="muted" v-if="panel.stats">UP {{ panel.stats.up }} / DOWN {{ panel.stats.down }}</span>
                 <span class="muted">点击端口定位链路</span>
               </div>
-              <div class="switch-port-grid">
-                <el-tooltip v-for="p in panel.ports" :key="p.if_index" placement="top" :show-after="150">
-                  <template #content>
-                    <div class="port-tip">
-                      <div><b class="mono">{{ p.if_name }}</b><span v-if="p.uplink" class="tip-uplink">上联</span></div>
-                      <div>状态：{{ p.oper_status === 1 ? 'UP' : 'DOWN' }}</div>
-                      <div>速率：{{ formatSpeed(p.if_speed) }}</div>
-                      <div>入/出：{{ (p.in_util || 0).toFixed(1) }}% / {{ (p.out_util || 0).toFixed(1) }}%</div>
+              <div v-for="block in panel.blocks" :key="block.key" class="switch-block">
+                <div class="switch-block-title">
+                  <span>{{ block.label || '全部端口' }}</span>
+                  <span class="muted">{{ block.stats?.total ?? block.ports.length }} 口 · UP {{ block.stats?.up ?? 0 }}</span>
+                </div>
+                <div class="switch-port-grid">
+                  <el-tooltip v-for="p in block.ports" :key="p.if_index" placement="top" :show-after="150">
+                    <template #content>
+                      <div class="port-tip">
+                        <div><b class="mono">{{ p.if_name }}</b><span v-if="p.uplink" class="tip-uplink">上联</span></div>
+                        <div>状态：{{ p.oper_status === 1 ? 'UP' : 'DOWN' }}</div>
+                        <div>速率：{{ formatSpeed(p.if_speed) }}</div>
+                        <div>入/出：{{ (p.in_util || 0).toFixed(1) }}% / {{ (p.out_util || 0).toFixed(1) }}%</div>
+                      </div>
+                    </template>
+                    <div class="switch-port" :class="portClass(p)" @click="onPortClick(p)">
+                      <span class="port-led"></span>
+                      <span class="port-label">{{ shortPortName(p) }}</span>
                     </div>
-                  </template>
-                  <div class="switch-port" :class="portClass(p)" @click="onPortClick(p)">
-                    <span class="port-led"></span>
-                    <span class="port-label">{{ shortPortName(p.if_name) }}</span>
-                  </div>
-                </el-tooltip>
+                  </el-tooltip>
+                </div>
               </div>
               <div class="switch-legend">
                 <span><i class="legend-led up"></i>UP {{ panel.stats?.up ?? 0 }}</span>
@@ -412,6 +435,10 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .switch-panel { background: linear-gradient(180deg, #16233c, #0d1629); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 12px; margin-bottom: 10px; }
 .switch-panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 11px; }
 .switch-panel-model { color: #eaf2ff; font-weight: 600; }
+.switch-block { margin-bottom: 12px; }
+.switch-block:last-of-type { margin-bottom: 4px; }
+.switch-block-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #b6cdec; padding: 4px 8px; margin-bottom: 6px; background: rgba(30,51,85,.45); border-left: 2px solid var(--primary); border-radius: 3px; }
+.switch-block-title .muted { font-size: 10px; }
 .switch-port-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
 .switch-port { background: #0b1526; border: 1px solid #2b4673; border-radius: 4px; padding: 6px 2px 4px; text-align: center; cursor: pointer; user-select: none; transition: background-color .15s, border-color .15s, box-shadow .15s; }
 .switch-port:hover { background: rgba(47,143,255,.18); border-color: #3f8ff0; }
