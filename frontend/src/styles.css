@@ -69,9 +69,13 @@ a { color: var(--primary); text-decoration: none; }
   background: linear-gradient(145deg, rgba(23, 39, 68, .95), rgba(12, 21, 39, .95));
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .stat-card::after {
   content: '';
@@ -83,9 +87,9 @@ a { color: var(--primary); text-decoration: none; }
   border-radius: 50%;
   background: radial-gradient(circle, rgba(47, 143, 255, .22), transparent 70%);
 }
-.stat-label { color: var(--muted); font-size: 12px; letter-spacing: .5px; }
-.stat-value { font-size: 30px; font-weight: 700; line-height: 1.25; margin-top: 4px; }
-.stat-suffix { font-size: 13px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+.stat-label { color: var(--muted); font-size: 12px; letter-spacing: .5px; white-space: nowrap; }
+.stat-value { font-size: 24px; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+.stat-suffix { font-size: 12px; color: var(--muted); margin-left: 3px; font-weight: 400; }
 .stat-card.is-danger .stat-value { color: var(--danger); }
 .stat-card.is-success .stat-value { color: var(--success); }
 .stat-card.is-warning .stat-value { color: var(--warning); }

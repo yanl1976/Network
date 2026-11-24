@@ -585,10 +585,11 @@ watch(() => store.seq, () => {
 .flow-chart { height: 130px; width: 100%; }
 .flow-popup-foot { font-size: 10px; color: #6d84aa; text-align: right; margin-top: 4px; }
 .empty-detail { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55709c; text-align: center; padding: 20px; }
-.detail-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
-.detail-name { font-size: 17px; font-weight: 700; }
-.detail-ip { color: var(--muted); font-size: 12px; margin-top: 3px; }
-.detail-tags { display: flex; gap: 6px; margin-top: 9px; }
+.detail-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.detail-name { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.detail-ip { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.detail-tags { display: flex; gap: 4px; margin-left: auto; white-space: nowrap; }
+.detail-tags .el-tag { font-size: 10px; height: 20px; line-height: 18px; }
 .detail-summary-line { padding: 0 16px 8px; font-size: 11px; color: #9fb4d6; line-height: 1.5; }
 .detail-badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
 .detail-badge { background: rgba(30,51,85,.45); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
