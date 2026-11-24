@@ -28,6 +28,7 @@ export const api = {
   configDiff: (oldId, newId) => request(`/configs/diff?oldId=${oldId}&newId=${newId}`),
   compliance: () => request('/compliance'),
   report: (days = 1) => request(`/report?days=${days}`),
+  impact: (ip) => request(`/impact?ip=${encodeURIComponent(ip)}`),
   metrics: (deviceId, limit = 120) => request(`/metrics/${deviceId}?limit=${limit}`),
   poll: () => request('/poll', { method: 'POST' }),
   scan: () => request('/scan', { method: 'POST' }),

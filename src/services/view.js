@@ -203,6 +203,71 @@ export function getPathFromDevice(ip) {
   return { path };
 }
 
+// 影响范围分析：以指定设备为故障点，沿链路图反推上游依赖与下游受影响设备
+export function getImpactAnalysis(ip) {
+  const devices = db.prepare('SELECT id, ip, hostname, role, status, device_type FROM devices').all();
+  const byId = new Map(devices.map((d) => [d.id, d]));
+  const byIp = new Map(devices.map((d) => [d.ip, d]));
+  const target = byIp.get(ip);
+  if (!target) return { error: '设备不在清单中' };
+  const links = db.prepare('SELECT * FROM links').all();
+  const adj = new Map(devices.map((d) => [d.ip, []]));
+  for (const l of links) {
+    const local = byId.get(l.local_device_id)?.ip;
+    const remote = l.remote_ip || (l.remote_device_id ? byId.get(l.remote_device_id)?.ip : null);
+    if (!local || !remote || local === remote || !adj.has(remote)) continue;
+    adj.get(local).push({ next: remote, localPort: l.local_port || '', remotePort: l.remote_port || '' });
+    adj.get(remote).push({ next: local, localPort: l.remote_port || '', remotePort: l.local_port || '' });
+  }
+  const rank = (d) => ROLE_RANK[d?.role] ?? 0;
+  const node = (d, via) => ({ ip: d.ip, name: d.hostname || d.ip, role: d.role, rank: rank(d), status: d.status, viaPort: via || '' });
+
+  // 上游：角色比目标高或直接相连的核心/汇聚，BFS 找所有可达的更高角色设备
+  const upstream = [];
+  const upVisited = new Set([target.ip]);
+  const upQueue = [target.ip];
+  while (upQueue.length) {
+    const cur = upQueue.shift();
+    for (const e of adj.get(cur) || []) {
+      if (upVisited.has(e.next)) continue;
+      const peer = byIp.get(e.next);
+      if (rank(peer) > rank(byIp.get(cur)) || rank(peer) >= ROLE_RANK.aggregation) {
+        upVisited.add(e.next);
+        upstream.push(node(peer, e.localPort));
+        upQueue.push(e.next);
+      }
+    }
+  }
+
+  // 下游：从目标出发 BFS，经更低或相同角色设备（终端/接入/汇聚），跳过上游方向
+  const downstream = [];
+  const downVisited = new Set([target.ip]);
+  const downQueue = [{ ip: target.ip, hops: 0 }];
+  while (downQueue.length) {
+    const { ip: cur, hops } = downQueue.shift();
+    if (hops >= 4) continue;
+    for (const e of adj.get(cur) || []) {
+      if (downVisited.has(e.next)) continue;
+      const peer = byIp.get(e.next);
+      if (rank(peer) <= rank(byIp.get(cur))) {
+        downVisited.add(e.next);
+        downstream.push({ ...node(peer, e.localPort), hops: hops + 1 });
+        downQueue.push({ ip: e.next, hops: hops + 1 });
+      }
+    }
+  }
+
+  const direct = (adj.get(target.ip) || []).map((e) => ({ ...node(byIp.get(e.next), e.localPort), remotePort: e.remotePort }));
+  return {
+    target: node(target),
+    directNeighbors: direct,
+    upstream: upstream.sort((a, b) => b.rank - a.rank),
+    downstream: downstream.sort((a, b) => a.hops - b.hops || b.rank - a.rank),
+    impactCount: downstream.length,
+    summary: `${target.hostname || ip} 故障将影响 ${downstream.length} 台下游设备，涉及 ${upstream.length} 台上游设备`
+  };
+}
+
 export function getTopology() {
   const devices = db.prepare('SELECT id, ip, hostname, role, device_type, status, cpu, memory, model, location FROM devices').all();
   const deviceByIp = new Map(devices.map((d) => [d.ip, d]));

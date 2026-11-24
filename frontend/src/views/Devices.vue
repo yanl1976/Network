@@ -18,6 +18,9 @@ const configText = ref('');
 const configDialog = ref(false);
 const configDiff = ref(null);
 const configDiffDialog = ref(false);
+const impact = ref(null);
+const impactDialog = ref(false);
+const impactLoading = ref(false);
 const loading = ref(false);
 const managed = ref([]);
 const editDialog = ref(false);
@@ -167,6 +170,16 @@ async function viewConfigDiff(index) {
     configDiff.value = await api.configDiff(older.id, newer.id);
     configDiffDialog.value = true;
   } catch (error) { ElMessage.error(error.message || '加载对比失败'); }
+}
+
+async function showImpact() {
+  if (!detail.value?.ip) return;
+  impactLoading.value = true;
+  try {
+    impact.value = await api.impact(detail.value.ip);
+    impactDialog.value = true;
+  } catch (error) { ElMessage.error(error.message || '分析失败'); }
+  finally { impactLoading.value = false; }
 }
 
 async function doMacLookup() {
@@ -368,7 +381,9 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
           </el-table>
         </div>
         <div class="drawer-section">
-          <div class="drawer-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
+          <div class="drawer-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span>
+            <el-button link type="primary" size="small" :loading="impactLoading" style="margin-left:auto" @click="showImpact">影响范围分析</el-button>
+          </div>
           <div v-if="!detail.links?.length" class="muted" style="font-size:12px">暂无链路数据</div>
           <el-table v-else :data="detail.links || []" size="small" max-height="300" class="nowrap-table" :row-class-name="linkRowClass">
             <el-table-column label="对端设备" min-width="180">
@@ -448,6 +463,27 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="impactDialog" title="设备故障影响范围分析" width="640px" v-if="impact">
+      <div class="impact-summary">{{ impact.summary }}</div>
+      <div class="impact-section" v-if="impact.upstream?.length">
+        <div class="impact-title">上游依赖（该设备故障不影响这些设备，但故障排查需关注）</div>
+        <div v-for="n in impact.upstream" :key="'u-' + n.ip" class="impact-item">
+          <el-tag size="small" effect="plain" type="warning">{{ n.role }}</el-tag>
+          <b>{{ n.name }}</b><span class="muted mono">{{ n.ip }}</span>
+          <span class="muted">经端口 {{ n.viaPort || '-' }}</span>
+        </div>
+      </div>
+      <div class="impact-section" v-if="impact.downstream?.length">
+        <div class="impact-title">下游受影响设备（{{ impact.downstream.length }} 台，按跳数排序）</div>
+        <div v-for="n in impact.downstream" :key="'d-' + n.ip" class="impact-item">
+          <el-tag size="small" effect="plain" :type="n.hops === 1 ? 'danger' : 'info'">{{ n.hops }} 跳</el-tag>
+          <b>{{ n.name }}</b><span class="muted mono">{{ n.ip }}</span>
+          <span class="muted">{{ n.role }} · 经 {{ n.viaPort || '-' }}</span>
+        </div>
+      </div>
+      <div v-if="!impact.upstream?.length && !impact.downstream?.length" class="muted" style="padding:16px 0">该设备暂无链路依赖数据</div>
+    </el-dialog>
   </div>
 </template>
 
@@ -476,6 +512,11 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .diff-context { color: #9fb4d6; }
 .diff-added { background: rgba(32,201,151,.14); color: #7ee0bd; }
 .diff-removed { background: rgba(255,77,94,.14); color: #ff9aa5; text-decoration: line-through; }
+.impact-summary { font-size: 13px; font-weight: 600; color: #ffc457; padding: 10px 12px; background: rgba(255,176,32,.08); border-left: 3px solid var(--warning); border-radius: 4px; margin-bottom: 14px; }
+.impact-section { margin-bottom: 14px; }
+.impact-title { font-size: 12px; font-weight: 600; color: #cfe0ff; margin-bottom: 6px; }
+.impact-item { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.impact-item .muted { font-size: 11px; }
 
 /* 交换机端口面板 */
 .port-switch-wrap { margin-left: auto; display: flex; gap: 6px; }

@@ -5,7 +5,7 @@ import { pollOnce, scanOnce, backupConfigs, lookupMac, collectAllMacTables } fro
 import { checkPorts } from '../collectors/network.js';
 import { seedDemo } from '../collectors/demo.js';
 import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
-import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics, diffConfigs } from '../services/view.js';
+import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics, diffConfigs, getImpactAnalysis } from '../services/view.js';
 import { runCompliance } from '../services/compliance.js';
 import { buildReport } from '../services/report.js';
 
@@ -92,6 +92,7 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   });
   router.get('/compliance', (req, res) => ok(res, runCompliance(req.query.deviceId ? Number(req.query.deviceId) : null)));
   router.get('/report', (req, res) => ok(res, buildReport(Math.min(90, Math.max(1, Number(req.query.days) || 1)))));
+  router.get('/impact', (req, res) => ok(res, getImpactAnalysis(String(req.query.ip ?? ''))));
   router.get('/metrics/:deviceId', (req, res) => {
     const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 120));
     return ok(res, getMetrics(Number(req.params.deviceId), limit));
