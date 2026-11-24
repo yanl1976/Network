@@ -1,10 +1,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, Refresh, Document } from '@element-plus/icons-vue';
+import { Search, Refresh, Document, Download } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
 import { store } from '../store.js';
+import { exportExcel } from '../utils/exportExcel.js';
 
 import { typeColor } from '../device-icons.js';
 const statusMap = { online: ['在线', 'success'], warning: ['告警', 'warning'], critical: ['严重', 'danger'], offline: ['离线', 'info'] };
@@ -12,6 +13,9 @@ const devices = ref([]);
 const keyword = ref('');
 const roleFilter = ref('');
 const statusFilter = ref('');
+const systemFilter = ref('');
+const deptFilter = ref('');
+const envFilter = ref('');
 const detail = ref(null);
 const drawer = ref(false);
 const configText = ref('');
@@ -64,7 +68,7 @@ const portPanels = computed(() => {
   ));
 });
 
-const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
+const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', tags: { system: '', dept: '', env: '' }, username: '', password: '', superPassword: '', clearCredentials: false });
 
 function formatSpeed(bps) {
   if (!bps) return '-';
@@ -106,14 +110,14 @@ function openAdd() {
 function openEdit(row) {
   const m = managed.value.find((d) => d.ip === row.ip) || {};
   editing.value = true;
-  form.value = { ...emptyForm(), ...m, username: '', password: '', superPassword: '' };
+  form.value = { ...emptyForm(), ...m, tags: { ...emptyForm().tags, ...(m.tags || {}) }, username: '', password: '', superPassword: '' };
   editDialog.value = true;
 }
 
 async function saveDevice() {
   const f = form.value;
   const payload = {
-    name: f.name, ip: f.ip, role: f.role, type: f.type, model: f.model, location: f.location,
+    name: f.name, ip: f.ip, role: f.role, type: f.type, model: f.model, location: f.location, tags: f.tags,
     username: f.username, password: f.password, superPassword: f.superPassword,
     clearCredentials: f.clearCredentials
   };
@@ -137,12 +141,48 @@ async function deleteDevice(row) {
   } catch (error) { ElMessage.error(error.message); }
 }
 
+const managedByIp = computed(() => new Map(managed.value.map((m) => [m.ip, m])));
+const tagOptions = computed(() => {
+  const out = {};
+  for (const k of ['system', 'dept', 'env']) out[k] = [...new Set(managed.value.map((m) => m.tags?.[k]).filter(Boolean))].sort();
+  return out;
+});
+const tagsOf = (ip) => managedByIp.value.get(ip)?.tags || {};
+const visibleTags = (ip) => { const t = tagsOf(ip); return [t.system, t.dept, t.env].filter(Boolean); };
+
 const filtered = computed(() => devices.value.filter((d) => {
   const q = keyword.value.trim().toLowerCase();
-  return (!q || [d.hostname, d.ip, d.model, d.location].some((v) => String(v ?? '').toLowerCase().includes(q)))
+  const tags = tagsOf(d.ip);
+  return (!q || [d.hostname, d.ip, d.model, d.location, tags.system, tags.dept, tags.env].some((v) => String(v ?? '').toLowerCase().includes(q)))
     && (!roleFilter.value || d.role === roleFilter.value)
-    && (!statusFilter.value || d.status === statusFilter.value);
+    && (!statusFilter.value || d.status === statusFilter.value)
+    && (!systemFilter.value || tags.system === systemFilter.value)
+    && (!deptFilter.value || tags.dept === deptFilter.value)
+    && (!envFilter.value || tags.env === envFilter.value);
 }));
+
+function exportDevices() {
+  const roleNames = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
+  const typeNames = { switch: '交换机', firewall: '防火墙', router: '路由器', server: '服务器' };
+  const columns = [
+    { label: '设备名称', prop: 'hostname', width: 20 },
+    { label: '管理 IP', prop: 'ip', width: 16 },
+    { label: '设备类型', width: 12, value: (r) => typeNames[r.deviceType] || r.roleLabel || '' },
+    { label: '设备角色', width: 14, value: (r) => roleNames[r.role] || r.role || '' },
+    { label: '型号', prop: 'model', width: 24 },
+    { label: '位置', prop: 'location', width: 18 },
+    { label: '业务系统', width: 16, value: (r) => tagsOf(r.ip).system || '' },
+    { label: '部门', width: 16, value: (r) => tagsOf(r.ip).dept || '' },
+    { label: '环境', width: 12, value: (r) => tagsOf(r.ip).env || '' },
+    { label: '状态', width: 10, value: (r) => statusMap[r.status]?.[0] || r.status || '' },
+    { label: 'CPU(%)', prop: 'cpu', width: 10 },
+    { label: '内存(%)', prop: 'memory', width: 10 },
+    { label: '端口数', prop: 'interface_count', width: 10 },
+    { label: '活动告警', prop: 'alert_count', width: 10 }
+  ];
+  exportExcel(`网络设备清单_${new Date().toISOString().slice(0, 10)}.xlsx`, [{ name: '设备清单', columns, rows: filtered.value }]);
+  ElMessage.success(`已导出 ${filtered.value.length} 台设备`);
+}
 
 async function load() {
   loading.value = true;
@@ -239,6 +279,7 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
       <div><h2>设备清单</h2><div class="sub">共 {{ devices.length }} 台 H3C 网络设备 · 点击查看端口与配置详情</div></div>
       <div style="display:flex;gap:8px">
         <el-button :icon="Refresh" size="small" @click="load">刷新</el-button>
+        <el-button :icon="Download" size="small" @click="exportDevices">导出 Excel</el-button>
         <el-button size="small" @click="openAdd">新增设备</el-button>
         <el-button type="primary" size="small" @click="backupAll">批量备份配置</el-button>
       </div>
@@ -284,6 +325,15 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-select v-model="statusFilter" placeholder="运行状态" size="small" clearable style="width:140px">
           <el-option label="在线" value="online" /><el-option label="告警" value="warning" /><el-option label="严重" value="critical" /><el-option label="离线" value="offline" />
         </el-select>
+        <el-select v-model="systemFilter" placeholder="业务系统" size="small" clearable filterable style="width:140px">
+          <el-option v-for="v in tagOptions.system" :key="v" :label="v" :value="v" />
+        </el-select>
+        <el-select v-model="deptFilter" placeholder="部门" size="small" clearable filterable style="width:130px">
+          <el-option v-for="v in tagOptions.dept" :key="v" :label="v" :value="v" />
+        </el-select>
+        <el-select v-model="envFilter" placeholder="环境" size="small" clearable style="width:110px">
+          <el-option v-for="v in tagOptions.env" :key="v" :label="v" :value="v" />
+        </el-select>
         <span class="muted" style="margin-left:auto;font-size:12px">筛选结果 {{ filtered.length }} 台</span>
       </div>
       <el-table :data="filtered" size="small" v-loading="loading" @row-click="openDetail" style="width:100%">
@@ -294,6 +344,12 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-table-column label="设备类型" width="110"><template #default="{ row }"><el-tag size="small" effect="dark" :color="typeColor(row)" style="border:0">{{ ({ switch: '交换机', firewall: '防火墙', router: '路由器', server: '服务器' })[row.deviceType] || row.roleLabel }}</el-tag></template></el-table-column>
         <el-table-column prop="model" label="型号" min-width="170" />
         <el-table-column prop="location" label="位置" min-width="130" />
+        <el-table-column label="标签" min-width="170">
+          <template #default="{ row }">
+            <el-tag v-for="t in visibleTags(row.ip)" :key="t" size="small" effect="plain" style="margin-right:4px">{{ t }}</el-tag>
+            <span v-if="!visibleTags(row.ip).length" class="muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="84"><template #default="{ row }"><el-tag :type="statusTag(row.status)" size="small" effect="dark">{{ statusMap[row.status]?.[0] || row.status }}</el-tag></template></el-table-column>
         <el-table-column label="CPU" width="104"><template #default="{ row }"><el-progress :percentage="row.cpu ?? 0" :stroke-width="6" :show-text="false" :color="row.cpu >= 90 ? '#ff4d5e' : row.cpu >= 70 ? '#ffb020' : '#2f8fff'" /><span class="muted" style="font-size:10px">{{ row.cpu }}%</span></template></el-table-column>
         <el-table-column label="内存" width="104"><template #default="{ row }"><el-progress :percentage="row.memory ?? 0" :stroke-width="6" :show-text="false" :color="row.memory >= 90 ? '#ff4d5e' : row.memory >= 75 ? '#ffb020' : '#a06bff'" /><span class="muted" style="font-size:10px">{{ row.memory }}%</span></template></el-table-column>
@@ -430,6 +486,9 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <el-form-item label="设备类型"><el-select v-model="form.type" style="width:100%"><el-option label="交换机" value="switch" /><el-option label="防火墙" value="firewall" /><el-option label="路由器" value="router" /><el-option label="服务器" value="server" /></el-select></el-form-item>
         <el-form-item label="型号"><el-input v-model="form.model" placeholder="如 H3C S6520X-54QC-EI" /></el-form-item>
         <el-form-item label="位置"><el-input v-model="form.location" placeholder="如 中心机房A柜" /></el-form-item>
+        <el-form-item label="业务系统"><el-input v-model="form.tags.system" placeholder="如 生产监控 / ERP / OA" /></el-form-item>
+        <el-form-item label="所属部门"><el-input v-model="form.tags.dept" placeholder="如 信息中心 / 制造部" /></el-form-item>
+        <el-form-item label="环境"><el-input v-model="form.tags.env" placeholder="如 生产 / 测试 / 灾备" /></el-form-item>
         <div class="cred-divider">SSH 登录信息（写入 .env，与凭据表同步）</div>
         <el-form-item label="用户名"><el-input v-model="form.username" placeholder="留空表示沿用当前/env全局" /></el-form-item>
         <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password placeholder="留空表示不修改" /></el-form-item>

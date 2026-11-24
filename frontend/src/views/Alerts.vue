@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { Refresh, CircleCheck } from '@element-plus/icons-vue';
+import { Refresh, CircleCheck, Download } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { api } from '../api.js';
 import { store } from '../store.js';
+import { exportExcel } from '../utils/exportExcel.js';
 
 const alerts = ref([]);
 const severityFilter = ref('');
@@ -78,6 +79,23 @@ function notesOf(row) {
 function severityType(s) { return s === 'critical' ? 'danger' : s === 'warning' ? 'warning' : 'info'; }
 function formatTime(ts) { return ts ? String(ts).replace('T', ' ').slice(0, 19) : '-'; }
 
+function exportAlerts() {
+  const columns = [
+    { label: '级别', width: 10, value: (r) => r.severity === 'critical' ? '严重' : r.severity === 'warning' ? '警告' : '提示' },
+    { label: '告警类型', width: 16, value: (r) => typeLabels[r.type] || r.type },
+    { label: '设备', prop: 'device_name', width: 20 },
+    { label: 'IP 地址', prop: 'device_ip', width: 16 },
+    { label: '告警内容', prop: 'message', width: 46 },
+    { label: '当前值', prop: 'value', width: 14 },
+    { label: '触发时间', width: 20, value: (r) => formatTime(r.created_at) },
+    { label: '处理状态', width: 12, value: (r) => statusLabel(r) },
+    { label: '处理人', prop: 'assignee', width: 12 },
+    { label: '备注', width: 40, value: (r) => notesOf(r).map((n) => `${n.at} ${n.author}: ${n.text}`).join('\n') }
+  ];
+  exportExcel(`告警明细_${new Date().toISOString().slice(0, 10)}.xlsx`, [{ name: '告警明细', columns, rows: filtered.value }]);
+  ElMessage.success(`已导出 ${filtered.value.length} 条告警`);
+}
+
 onMounted(load);
 watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved', 'alert:resolvedAll', 'alert:updated', 'data:reset', 'mode:changed'].includes(store.event?.type)) load(); });
 </script>
@@ -88,6 +106,7 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
       <div><h2>告警中心</h2><div class="sub">设备失联、性能越限与端口链路异常的实时监控</div></div>
       <div style="display:flex;gap:8px">
         <el-button :icon="Refresh" size="small" @click="load">刷新</el-button>
+        <el-button :icon="Download" size="small" @click="exportAlerts">导出 Excel</el-button>
         <el-button :icon="CircleCheck" size="small" type="primary" @click="resolveAll">全部解决</el-button>
       </div>
     </div>

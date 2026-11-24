@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, Refresh, Location, Connection } from '@element-plus/icons-vue';
+import { Search, Refresh, Location, Connection, Download } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { api } from '../api.js';
+import { exportExcel } from '../utils/exportExcel.js';
 
 const router = useRouter();
 const macQuery = ref('');
@@ -63,6 +64,20 @@ function showOnly(mac) {
   doMacLookup();
 }
 
+function exportMac() {
+  const columns = [
+    { label: 'MAC 地址', prop: 'mac', width: 20 },
+    { label: '接入交换机', prop: 'device_name', width: 20 },
+    { label: '管理 IP', prop: 'device_ip', width: 16 },
+    { label: '接入端口', prop: 'port', width: 22 },
+    { label: 'VLAN', prop: 'vlan', width: 10 },
+    { label: '来源', prop: 'source', width: 10 },
+    { label: '采集时间', prop: 'updated_at', width: 20 }
+  ];
+  exportExcel(`MAC明细_${new Date().toISOString().slice(0, 10)}.xlsx`, [{ name: 'MAC明细', columns, rows: filteredEntries.value }]);
+  ElMessage.success(`已导出 ${filteredEntries.value.length} 条 MAC 明细`);
+}
+
 function locateOnTopology(ip) {
   router.push({ path: '/topology', query: { ip } });
 }
@@ -115,6 +130,7 @@ onMounted(loadEntries);
       <div class="tool-bar">
         <el-input v-model="listFilter" size="small" placeholder="筛选 MAC / 设备 / 端口" :prefix-icon="Search" style="width:260px" clearable />
         <el-button size="small" :icon="Refresh" @click="loadEntries">刷新</el-button>
+        <el-button size="small" :icon="Download" @click="exportMac">导出 Excel</el-button>
         <el-button size="small" type="primary" :loading="collecting" @click="collectMac">采集全网 MAC</el-button>
         <span class="muted" style="font-size:11px">展示 {{ filteredEntries.length }} 条</span>
       </div>

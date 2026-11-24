@@ -112,6 +112,15 @@ export function getManagedDevices() {
   }));
 }
 
+function normalizeTags(tags) {
+  const t = tags && typeof tags === 'object' ? tags : {};
+  return {
+    system: String(t.system ?? '').trim(),
+    dept: String(t.dept ?? '').trim(),
+    env: String(t.env ?? '').trim()
+  };
+}
+
 function validateDevice(input, existingIp = null) {
   if (!input || typeof input !== 'object') throw new Error('设备参数无效');
   const ip = String(input.ip ?? '').trim();
@@ -124,13 +133,15 @@ function validateDevice(input, existingIp = null) {
   const type = String(input.type ?? 'switch');
   if (!['core', 'aggregation', 'access', 'border', 'server'].includes(role)) throw new Error('设备角色无效');
   if (!['switch', 'firewall', 'router', 'server'].includes(type)) throw new Error('设备类型无效');
+  const existing = existingIp ? (config.devices || []).find((d) => d.ip === existingIp) : null;
   return {
     ip,
     name,
     role,
     type,
     model: String(input.model ?? '').trim(),
-    location: String(input.location ?? '').trim()
+    location: String(input.location ?? '').trim(),
+    tags: normalizeTags(input.tags ?? existing?.tags)
   };
 }
 
