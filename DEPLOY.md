@@ -1,5 +1,18 @@
 # 容器部署说明（生产服务器 192.168.20.31）
 
+## 历史重写后的同步（2026-11-24，仅需一次）
+
+曾用 `git filter-repo` 清除历史中的明文凭据并 force push `main`，所有 commit hash 已变更。旧 clone 直接 `git pull` 会报 `Need to specify how to reconcile divergent branches`，按下面任一方式处理：
+
+```bash
+cd /opt/Network
+git reset --hard origin/main     # 方式一：本地对齐到重写后的远端（未提交改动会丢失）
+# 或：删除目录后重新 git clone https://github.com/yanl1976/Network.git（方式二，需重新放回 .env 与 config/app.json）
+git pull origin main             # 应显示 Already up to date.
+```
+
+注意：`reset --hard` 不会删除 gitignore 的 `.env` 与 `config/app.json`，凭据文件安全。
+
 ## 前置：安装 Docker（手工执行）
 
 当前 apt 源没有 `docker-compose-plugin` 包，用官方二进制单独装：
@@ -84,7 +97,8 @@ docker compose logs -f frontend     # 看前端日志
 docker compose restart backend      # 重启后端
 docker compose down                 # 停止（不删数据）
 docker compose up -d                # 启动
-docker compose up -d --build        # 改代码后重新构建
+docker compose up -d --build        # 改代码后重新构建（前后端镜像都会重建）
+docker compose restart backend      # 仅后端配置/代码变动时重启
 docker compose exec backend sh      # 进后端容器
 ```
 
