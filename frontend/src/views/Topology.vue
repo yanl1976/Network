@@ -525,7 +525,6 @@ watch(() => store.seq, () => {
           <div class="detail-actions">
             <el-button size="small" type="primary" @click="openInDevices">在设备清单中查看</el-button>
             <el-button size="small" plain @click="backupSelected">备份配置</el-button>
-            <el-button size="small" plain @click="selectedIp = null; detail = null">关闭详情</el-button>
           </div>
         </template>
       </div>
@@ -592,7 +591,7 @@ watch(() => store.seq, () => {
 .detail-tags .el-tag { font-size: 10px; height: 20px; line-height: 18px; }
 .detail-summary-line { padding: 0 16px 8px; font-size: 11px; color: #9fb4d6; line-height: 1.5; }
 .detail-badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
-.detail-badge { background: rgba(30,51,85,.45); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.detail-badge { background: rgba(30,51,85,.45); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; text-align: center; }
 .detail-badge .badge-label { display: block; font-size: 10px; color: var(--muted); }
 .detail-badge b { display: block; font-size: 20px; line-height: 1.2; margin: 2px 0; }
 .detail-badge .badge-sub { display: block; font-size: 10px; color: var(--muted); }
