@@ -5,6 +5,7 @@ import Alerts from './views/Alerts.vue';
 import Settings from './views/Settings.vue';
 import Tools from './views/Tools.vue';
 import Compliance from './views/Compliance.vue';
+import Report from './views/Report.vue';
 import Screen from './views/Screen.vue';
 
 export const router = createRouter({
@@ -17,6 +18,7 @@ export const router = createRouter({
     { path: '/settings', component: Settings, meta: { title: '系统设置' } },
     { path: '/tools', component: Tools, meta: { title: '网络工具' } },
     { path: '/compliance', component: Compliance, meta: { title: '合规巡检' } },
+    { path: '/report', component: Report, meta: { title: '巡检报告' } },
     { path: '/screen', component: Screen, meta: { title: '全屏展示', fullscreen: true } }
   ]
 });
