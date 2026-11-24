@@ -26,6 +26,7 @@ export const api = {
   configs: (deviceId) => request(`/configs/${deviceId}`),
   configContent: (id) => request(`/configs/content/${id}`),
   configDiff: (oldId, newId) => request(`/configs/diff?oldId=${oldId}&newId=${newId}`),
+  compliance: () => request('/compliance'),
   metrics: (deviceId, limit = 120) => request(`/metrics/${deviceId}?limit=${limit}`),
   poll: () => request('/poll', { method: 'POST' }),
   scan: () => request('/scan', { method: 'POST' }),

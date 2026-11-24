@@ -6,6 +6,7 @@ import { checkPorts } from '../collectors/network.js';
 import { seedDemo } from '../collectors/demo.js';
 import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
 import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics, diffConfigs } from '../services/view.js';
+import { runCompliance } from '../services/compliance.js';
 
 const ok = (res, data) => res.json({ code: 0, data });
 const fail = (res, message, status = 500) => res.status(status).json({ code: 1, message });
@@ -88,6 +89,7 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
     const data = diffConfigs(Number(req.query.oldId), Number(req.query.newId));
     return data ? ok(res, data) : fail(res, '配置记录不存在', 404);
   });
+  router.get('/compliance', (req, res) => ok(res, runCompliance(req.query.deviceId ? Number(req.query.deviceId) : null)));
   router.get('/metrics/:deviceId', (req, res) => {
     const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 120));
     return ok(res, getMetrics(Number(req.params.deviceId), limit));
