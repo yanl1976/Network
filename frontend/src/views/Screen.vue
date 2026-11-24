@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import G6 from '@antv/g6';
 import * as echarts from 'echarts';
 import { api } from '../api.js';
-import { store } from '../store.js';
+import { store, refreshBranding } from '../store.js';
 import { deviceIconUri, typeColor, TYPE_COLORS } from '../device-icons.js';
 import { registerFlowEdge, FLOW_EDGE_STYLE } from '../flow-edge.js';
 
@@ -157,6 +157,7 @@ async function toggleFullscreen() {
 function onFullscreenChange() { isFullscreen.value = Boolean(document.fullscreenElement); }
 
 onMounted(async () => {
+  await refreshBranding();
   await load();
   timer = setInterval(() => { now.value = new Date(); }, 1000);
   resizeObserver = new ResizeObserver(() => {
@@ -188,8 +189,8 @@ watch(() => store.seq, () => {
         <span class="muted">{{ store.connected ? '实时数据通道已连接' : '数据通道连接中' }}</span>
       </div>
       <div class="header-center">
-        <div class="screen-title">H3C 网络设备动态拓扑监控中心</div>
-        <div class="screen-subtitle">NETWORK TOPOLOGY & MONITORING CENTER</div>
+        <div class="screen-title">{{ store.branding.screenTitle }}</div>
+        <div class="screen-subtitle">{{ store.branding.screenSubtitle }}</div>
       </div>
       <div class="header-side right">
         <span class="clock">{{ clock }}</span>

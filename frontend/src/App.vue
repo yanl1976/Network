@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Monitor, Connection, List, Bell, Setting, FullScreen, Refresh, Tools } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { api, watchEvents } from './api.js';
-import { store, pushEvent, refreshOverview } from './store.js';
+import { store, pushEvent, refreshOverview, refreshBranding } from './store.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +31,7 @@ async function poll() {
 
 onMounted(async () => {
   await refreshOverview();
+  await refreshBranding();
   ws = watchEvents((msg) => {
     store.connected = true;
     pushEvent(msg);
@@ -54,8 +55,8 @@ onUnmounted(() => {
       <div class="brand">
         <div class="brand-icon"><el-icon><Connection /></el-icon></div>
         <div>
-          <div class="brand-title">网络拓扑监控</div>
-          <div class="brand-sub">H3C NETWORK MONITOR</div>
+          <div class="brand-title">{{ store.branding.sidebarTitle }}</div>
+          <div class="brand-sub">{{ store.branding.sidebarSubtitle }}</div>
         </div>
       </div>
       <el-menu :default-active="currentPath" router>

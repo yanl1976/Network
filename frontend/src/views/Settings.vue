@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api.js';
-import { store, refreshOverview } from '../store.js';
+import { store, refreshOverview, refreshBranding } from '../store.js';
 
 const config = ref(null);
 const draft = ref({});
@@ -13,10 +13,18 @@ const subnetInput = ref('');
 
 import { typeColor } from '../device-icons.js';
 
+const defaultBranding = {
+  screenTitle: 'H3C 网络设备动态拓扑监控中心',
+  screenSubtitle: 'NETWORK TOPOLOGY & MONITORING CENTER',
+  sidebarTitle: '网络拓扑监控',
+  sidebarSubtitle: 'H3C NETWORK MONITOR'
+};
+
 async function load() {
   config.value = await api.settings();
   draft.value = JSON.parse(JSON.stringify(config.value));
   draft.value.scan.ports = (config.value.scan.ports || []).join(', ');
+  draft.value.branding = { ...defaultBranding, ...(config.value.branding || {}) };
 }
 
 function addSubnet() {
@@ -39,7 +47,9 @@ async function save() {
     config.value = next;
     draft.value = JSON.parse(JSON.stringify(next));
     draft.value.scan.ports = (next.scan.ports || []).join(', ');
+    draft.value.branding = { ...defaultBranding, ...(next.branding || {}) };
     await refreshOverview();
+    await refreshBranding();
     ElMessage.success('系统设置已保存');
   } finally { saving.value = false; }
 }
@@ -103,6 +113,17 @@ onMounted(load);
         <el-alert :type="config.mode === 'demo' ? 'warning' : 'success'" :closable="false" style="margin-top:12px"
           :title="config.mode === 'demo' ? '当前为演示模式，所有指标为模拟生成' : '当前为真实采集模式，数据来自设备'" />
         <el-button size="small" style="margin-top:12px" @click="reseed">重置演示数据</el-button>
+      </div>
+
+      <div class="panel settings-card">
+        <div class="panel-title">界面显示</div>
+        <el-form label-width="96px" size="small">
+          <el-form-item label="侧栏标题"><el-input v-model="draft.branding.sidebarTitle" maxlength="30" placeholder="网络拓扑监控" /></el-form-item>
+          <el-form-item label="侧栏副标题"><el-input v-model="draft.branding.sidebarSubtitle" maxlength="40" placeholder="H3C NETWORK MONITOR" /></el-form-item>
+          <el-form-item label="大屏标题"><el-input v-model="draft.branding.screenTitle" maxlength="50" placeholder="H3C 网络设备动态拓扑监控中心" /></el-form-item>
+          <el-form-item label="大屏副标题"><el-input v-model="draft.branding.screenSubtitle" maxlength="60" placeholder="NETWORK TOPOLOGY & MONITORING CENTER" /></el-form-item>
+        </el-form>
+        <div class="hint">分别控制左侧菜单顶部品牌区与「全屏展示」大屏的标题文字，保存后立即生效。</div>
       </div>
 
       <div class="panel settings-card">

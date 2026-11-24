@@ -1,5 +1,11 @@
 {
   "mode": "demo",
+  "branding": {
+    "screenTitle": "H3C 网络设备动态拓扑监控中心",
+    "screenSubtitle": "NETWORK TOPOLOGY & MONITORING CENTER",
+    "sidebarTitle": "网络拓扑监控",
+    "sidebarSubtitle": "H3C NETWORK MONITOR"
+  },
   "snmp": {
     "community": "public",
     "version": "2c",
