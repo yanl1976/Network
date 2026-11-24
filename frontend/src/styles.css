@@ -278,3 +278,11 @@ a { color: var(--primary); text-decoration: none; }
 .el-button--success.is-text { --el-button-text-color: #4fdcb0; --el-button-hover-text-color: #86e9c9; }
 .el-button--warning.is-link,
 .el-button--warning.is-text { --el-button-text-color: #ffc457; --el-button-hover-text-color: #ffd98f; }
+
+/* 端口面板 tooltip 内容（teleport 到 body，需全局样式） */
+.port-tip { font-size: 12px; line-height: 1.7; min-width: 130px; }
+.port-tip .tip-uplink { margin-left: 8px; color: #7bb8ff; }
+
+/* 点击端口后高亮对应链路 */
+.el-table__body tr.link-highlight > td.el-table__cell { background: rgba(255, 176, 32, .16) !important; color: #ffd98f; }
+.el-table__body tr.link-highlight:hover > td.el-table__cell { background: rgba(255, 176, 32, .24) !important; }

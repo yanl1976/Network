@@ -25,8 +25,35 @@ const router = useRouter();
 const macQuery = ref('');
 const macLoading = ref(false);
 const macResult = ref(null);
+const portView = ref('panel');
+const selectedPort = ref(null);
 
 const emptyForm = () => ({ ip: '', name: '', role: 'access', type: 'switch', model: '', location: '', username: '', password: '', superPassword: '', clearCredentials: false });
+
+function formatSpeed(bps) {
+  if (!bps) return '-';
+  return bps >= 1e9 ? (bps / 1e9) + ' Gbps' : (bps / 1e6) + ' Mbps';
+}
+function shortPortName(name = '') {
+  return String(name).match(/\d+(?:\/\d+)*/)?.[0] || String(name).slice(-4);
+}
+function portKey(name = '') {
+  return String(name).match(/(\d+(?:\/\d+)+)/)?.[1] || '';
+}
+function portClass(p) {
+  return {
+    up: p.oper_status === 1,
+    down: p.oper_status !== 1,
+    uplink: !!p.uplink,
+    active: selectedPort.value?.if_index === p.if_index
+  };
+}
+function onPortClick(p) {
+  selectedPort.value = selectedPort.value?.if_index === p.if_index ? null : p;
+}
+function linkRowClass({ row }) {
+  return selectedPort.value && portKey(row.localPort) === portKey(selectedPort.value.if_name) ? 'link-highlight' : '';
+}
 
 async function loadManaged() {
   managed.value = await api.managedDevices();
@@ -86,6 +113,7 @@ async function load() {
 
 async function openDetail(row) {
   detail.value = await api.device(row.id);
+  selectedPort.value = null;
   drawer.value = true;
 }
 
@@ -223,18 +251,59 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
           <div><span>系统描述</span><b>{{ detail.sys_descr }}</b></div>
         </div>
         <div class="drawer-section">
-          <div class="drawer-title">端口状态 <span class="muted">({{ detail.interfaces?.length || 0 }})</span></div>
-          <el-table :data="detail.interfaces || []" size="small" max-height="260" class="nowrap-table">
+          <div class="drawer-title">
+            端口状态
+            <span class="muted" v-if="detail.portStats">
+              (物理 {{ detail.portStats.total }} · UP {{ detail.portStats.up }} · DOWN {{ detail.portStats.down }}<template v-if="detail.portStats.hidden"> · 隐藏 {{ detail.portStats.hidden }} 个逻辑口</template>)
+            </span>
+            <span class="muted" v-else>({{ detail.interfaces?.length || 0 }})</span>
+            <el-radio-group v-model="portView" size="small" class="port-view-switch">
+              <el-radio-button label="panel">面板</el-radio-button>
+              <el-radio-button label="table">表格</el-radio-button>
+            </el-radio-group>
+          </div>
+          <template v-if="portView === 'panel'">
+            <div v-if="!detail.interfaces?.length" class="muted" style="font-size:12px;padding:16px 0">该设备暂无物理端口数据</div>
+            <div v-else class="switch-panel">
+              <div class="switch-panel-head">
+                <span class="switch-panel-model">{{ detail.model || '交换机' }}</span>
+                <span class="muted">物理端口面板 · 点击端口定位链路</span>
+              </div>
+              <div class="switch-port-grid">
+                <el-tooltip v-for="p in detail.interfaces" :key="p.if_index" placement="top" :show-after="150">
+                  <template #content>
+                    <div class="port-tip">
+                      <div><b class="mono">{{ p.if_name }}</b><span v-if="p.uplink" class="tip-uplink">上联</span></div>
+                      <div>状态：{{ p.oper_status === 1 ? 'UP' : 'DOWN' }}</div>
+                      <div>速率：{{ formatSpeed(p.if_speed) }}</div>
+                      <div>入/出：{{ (p.in_util || 0).toFixed(1) }}% / {{ (p.out_util || 0).toFixed(1) }}%</div>
+                    </div>
+                  </template>
+                  <div class="switch-port" :class="portClass(p)" @click="onPortClick(p)">
+                    <span class="port-led"></span>
+                    <span class="port-label">{{ shortPortName(p.if_name) }}</span>
+                  </div>
+                </el-tooltip>
+              </div>
+              <div class="switch-legend">
+                <span><i class="legend-led up"></i>UP {{ detail.portStats?.up ?? 0 }}</span>
+                <span><i class="legend-led down"></i>DOWN {{ detail.portStats?.down ?? 0 }}</span>
+                <span><i class="legend-led uplink"></i>上联口</span>
+              </div>
+            </div>
+          </template>
+          <el-table v-else :data="detail.interfaces || []" size="small" max-height="260" class="nowrap-table">
             <el-table-column prop="if_name" label="端口" min-width="180" class-name="mono" />
             <el-table-column label="状态" width="90"><template #default="{ row }"><span class="status-dot" :class="row.oper_status === 1 ? 'status-online' : 'status-offline'" />{{ row.oper_status === 1 ? 'UP' : 'DOWN' }}</template></el-table-column>
-            <el-table-column prop="if_speed" label="速率" min-width="120"><template #default="{ row }">{{ row.if_speed >= 1e9 ? (row.if_speed / 1e9) + ' Gbps' : (row.if_speed / 1e6) + ' Mbps' }}</template></el-table-column>
+            <el-table-column label="速率" min-width="120"><template #default="{ row }">{{ formatSpeed(row.if_speed) }}</template></el-table-column>
             <el-table-column label="入/出利用率" min-width="160"><template #default="{ row }">{{ (row.in_util || 0).toFixed(1) }}% / {{ (row.out_util || 0).toFixed(1) }}%</template></el-table-column>
+            <el-table-column label="链路" width="90"><template #default="{ row }"><el-tag v-if="row.uplink" size="small" effect="plain" type="primary">上联</el-tag><span v-else class="muted">-</span></template></el-table-column>
           </el-table>
         </div>
         <div class="drawer-section">
           <div class="drawer-title">链路连接 <span class="muted">({{ (detail.links || []).filter(l => l.known).length }} 条已知 / {{ (detail.links || []).length }} 条)</span></div>
           <div v-if="!detail.links?.length" class="muted" style="font-size:12px">暂无链路数据</div>
-          <el-table v-else :data="detail.links || []" size="small" max-height="300" class="nowrap-table">
+          <el-table v-else :data="detail.links || []" size="small" max-height="300" class="nowrap-table" :row-class-name="linkRowClass">
             <el-table-column label="对端设备" min-width="180">
               <template #default="{ row }">
                 <span class="status-dot" :class="row.status === 'up' ? 'status-online' : row.status === 'down' ? 'status-offline' : ''" />
@@ -311,10 +380,30 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .drawer-meta span { color: var(--muted); flex: 0 0 76px; }
 .drawer-meta b { font-weight: 500; text-align: right; white-space: nowrap; overflow: visible; text-overflow: clip; }
 .drawer-section { margin-top: 16px; }
-.drawer-title { font-size: 13px; font-weight: 600; margin-bottom: 9px; color: #cfe0ff; }
+.drawer-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 9px; color: #cfe0ff; }
 .config-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
 .config-text { max-height: 60vh; overflow: auto; background: #080e1c; color: #9fd0ff; font-size: 11px; line-height: 1.5; padding: 14px; border-radius: 6px; }
 .cred-divider { font-size: 12px; color: #cfe0ff; font-weight: 600; margin: 6px 0 12px 96px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* 交换机端口面板 */
+.port-view-switch { margin-left: auto; }
+.switch-panel { background: linear-gradient(180deg, #16233c, #0d1629); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 12px; }
+.switch-panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 11px; }
+.switch-panel-model { color: #eaf2ff; font-weight: 600; }
+.switch-port-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+.switch-port { background: #0b1526; border: 1px solid #2b4673; border-radius: 4px; padding: 6px 2px 4px; text-align: center; cursor: pointer; user-select: none; transition: background-color .15s, border-color .15s, box-shadow .15s; }
+.switch-port:hover { background: rgba(47,143,255,.18); border-color: #3f8ff0; }
+.switch-port .port-led { display: block; width: 9px; height: 9px; border-radius: 50%; margin: 0 auto 4px; background: #5a6b84; }
+.switch-port .port-label { display: block; font-size: 10px; font-family: Consolas, 'Courier New', monospace; color: #9fb4d6; white-space: nowrap; }
+.switch-port.up .port-led { background: #20c997; box-shadow: 0 0 7px rgba(32,201,151,.8); }
+.switch-port.uplink .port-led { background: #2f8fff; box-shadow: 0 0 7px rgba(47,143,255,.9); }
+.switch-port.active { border-color: #ffb020; background: rgba(255,176,32,.12); box-shadow: 0 0 0 1px #ffb020 inset; }
+.switch-port.active .port-label { color: #ffd98f; }
+.switch-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 10px; color: var(--muted); }
+.legend-led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.legend-led.up { background: #20c997; }
+.legend-led.down { background: #5a6b84; }
+.legend-led.uplink { background: #2f8fff; }
 
 /* 抽屉内容：不换行、不裁剪、不遮盖；超宽时横向滚动兜底 */
 :deep(.device-drawer) .el-drawer__body { overflow-x: auto; }

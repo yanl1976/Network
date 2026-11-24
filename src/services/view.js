@@ -2,6 +2,20 @@ import { db } from '../db.js';
 
 const roleLabel = { core: '核心交换机', aggregation: '汇聚交换机', access: '接入交换机', border: '边界设备', server: '服务器' };
 
+// 物理端口白名单：GE/XGE/TGE/25GE/40GE/100GE/FE/Ethernet 等；
+// Vlanif / LoopBack / NULL / Bridge-Aggregation / Eth-Trunk / Tunnel / 管理口等一律视为逻辑口
+const PHYSICAL_PORT_RE = /^(?:(?:100GE|25GE|40GE|XGE|TGE|GE|FE|CE|GigabitEthernet|Ten-GigabitEthernet|TwentyfiveGigE|FortyGigE|HundredGigE|FastEthernet|Ethernet|Eth)\s*\d)/i;
+
+export function isPhysicalPort(name) {
+  const n = String(name ?? '').trim();
+  if (!n || /\.\d+$/.test(n)) return false;
+  return PHYSICAL_PORT_RE.test(n);
+}
+
+function portKey(name) {
+  return String(name ?? '').match(/(\d+(?:\/\d+)+)/)?.[1] || '';
+}
+
 function deviceTypeOf(row) {
   if (row.device_type) return row.device_type;
   const name = (row.hostname || '').toUpperCase();
@@ -41,13 +55,25 @@ export function getDevices() {
     (SELECT COUNT(*) FROM interfaces i WHERE i.device_id=d.id) AS interface_count,
     (SELECT COUNT(*) FROM alerts a WHERE a.device_id=d.id AND a.active=1) AS alert_count
     FROM devices d ORDER BY CASE d.role WHEN 'core' THEN 0 WHEN 'aggregation' THEN 1 WHEN 'border' THEN 2 WHEN 'access' THEN 3 ELSE 4 END, d.ip`);
-  return rows.all().map((row) => ({ ...row, deviceType: deviceTypeOf(row), roleLabel: roleLabel[row.role] ?? row.role }));
+  const nameRows = db.prepare('SELECT device_id, if_name FROM interfaces').all();
+  const physicalCount = new Map();
+  for (const r of nameRows) {
+    if (!isPhysicalPort(r.if_name)) continue;
+    physicalCount.set(r.device_id, (physicalCount.get(r.device_id) || 0) + 1);
+  }
+  return rows.all().map((row) => ({
+    ...row,
+    interface_count: physicalCount.get(row.id) || 0,
+    deviceType: deviceTypeOf(row),
+    roleLabel: roleLabel[row.role] ?? row.role
+  }));
 }
 
 export function getDeviceDetail(id) {
   const device = db.prepare('SELECT * FROM devices WHERE id=?').get(id);
   if (!device) return null;
-  const interfaces = db.prepare('SELECT * FROM interfaces WHERE device_id=? ORDER BY if_index').all(id);
+  const allInterfaces = db.prepare('SELECT * FROM interfaces WHERE device_id=? ORDER BY if_index').all(id);
+  const interfaces = allInterfaces.filter((i) => isPhysicalPort(i.if_name));
   const metrics = db.prepare('SELECT cpu, memory, in_traffic, out_traffic, ts FROM metrics WHERE device_id=? ORDER BY ts DESC LIMIT 60').all(id).reverse();
   const alerts = db.prepare('SELECT * FROM alerts WHERE device_id=? ORDER BY created_at DESC LIMIT 20').all(id);
   const configs = db.prepare('SELECT id, hash, captured_at, LENGTH(content) AS bytes FROM configs WHERE device_id=? ORDER BY captured_at DESC LIMIT 20').all(id);
@@ -77,7 +103,15 @@ export function getDeviceDetail(id) {
       updatedAt: l.updated_at
     };
   });
-  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces, metrics, alerts, configs, links };
+  const uplinkKeys = new Set(links.filter((l) => l.direction === 'out').map((l) => portKey(l.localPort)).filter(Boolean));
+  const physicalInterfaces = interfaces.map((i) => ({ ...i, uplink: uplinkKeys.has(portKey(i.if_name)) }));
+  const portStats = {
+    total: interfaces.length,
+    up: interfaces.filter((i) => i.oper_status === 1).length,
+    down: interfaces.filter((i) => i.oper_status !== 1).length,
+    hidden: allInterfaces.length - interfaces.length
+  };
+  return { ...device, deviceType: deviceTypeOf(device), roleLabel: roleLabel[device.role] ?? device.role, interfaces: physicalInterfaces, portStats, metrics, alerts, configs, links };
 }
 
 const ROLE_RANK = { core: 5, aggregation: 4, border: 3, access: 2, server: 1 };
