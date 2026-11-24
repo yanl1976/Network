@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS interfaces (
   out_octets INTEGER DEFAULT 0,
   in_util REAL DEFAULT 0,
   out_util REAL DEFAULT 0,
+  ever_up INTEGER DEFAULT 0,
   updated_at TEXT,
   FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE,
   UNIQUE(device_id, if_index)
@@ -136,6 +137,12 @@ CREATE INDEX IF NOT EXISTS idx_metrics_device_ts ON metrics(device_id, ts);
 
 const columns = db.prepare('PRAGMA table_info(devices)').all().map((c) => c.name);
 if (!columns.includes('device_type')) db.exec("ALTER TABLE devices ADD COLUMN device_type TEXT DEFAULT 'switch'");
+const ifColumns = db.prepare('PRAGMA table_info(interfaces)').all().map((c) => c.name);
+if (!ifColumns.includes('ever_up')) {
+  db.exec('ALTER TABLE interfaces ADD COLUMN ever_up INTEGER DEFAULT 0');
+  // 迁移：当前 UP 的端口视为"曾 UP"，历史 DOWN 端口保持 0（未启用），避免一次性刷出大量假告警
+  db.exec('UPDATE interfaces SET ever_up=1 WHERE oper_status=1');
+}
 
 const now = () => new Date().toISOString();
 
@@ -156,13 +163,33 @@ export function upsertDevice(info) {
 
 export function replaceInterfaces(deviceId, list) {
   const ts = now();
-  const stmt = db.prepare(`INSERT INTO interfaces (device_id, if_index, if_name, if_descr, if_speed, oper_status, in_octets, out_octets, in_util, out_util, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const stmt = db.prepare(`INSERT INTO interfaces (device_id, if_index, if_name, if_descr, if_speed, oper_status, in_octets, out_octets, in_util, out_util, ever_up, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(device_id, if_index) DO UPDATE SET if_name=excluded.if_name, if_descr=excluded.if_descr, if_speed=excluded.if_speed,
       oper_status=excluded.oper_status, in_octets=excluded.in_octets, out_octets=excluded.out_octets,
-      in_util=excluded.in_util, out_util=excluded.out_util, updated_at=excluded.updated_at`);
-  const tx = db.transaction((rows) => rows.forEach((r) => stmt.run(deviceId, r.ifIndex, r.name, r.descr, r.speed, r.operStatus, r.inOctets, r.outOctets, r.inUtil ?? 0, r.outUtil ?? 0, ts)));
+      in_util=excluded.in_util, out_util=excluded.out_util,
+      ever_up=MAX(interfaces.ever_up, excluded.ever_up), updated_at=excluded.updated_at`);
+  const tx = db.transaction((rows) => rows.forEach((r) => stmt.run(
+    deviceId, r.ifIndex, r.name, r.descr, r.speed, r.operStatus, r.inOctets, r.outOctets,
+    r.inUtil ?? 0, r.outUtil ?? 0, r.operStatus === 1 ? 1 : 0, ts
+  )));
   tx(list);
+}
+
+// 端口告警判定：曾 UP 且当前 DOWN（真·链路中断），或曾 UP 且当前利用率超阈值
+export function getPortAlertCandidates(deviceId, utilWarn) {
+  const rows = db.prepare(`SELECT if_name, oper_status, in_util, out_util FROM interfaces
+    WHERE device_id=? AND ever_up=1`).all(deviceId);
+  const downPorts = [];
+  const highTraffic = [];
+  for (const r of rows) {
+    if (r.oper_status === 2) {
+      downPorts.push(r.if_name);
+    } else if (Number(r.in_util) >= utilWarn || Number(r.out_util) >= utilWarn) {
+      highTraffic.push({ name: r.if_name, inUtil: Number(r.in_util), outUtil: Number(r.out_util) });
+    }
+  }
+  return { downPorts, highTraffic };
 }
 
 export function replaceLinks(localDeviceId, list) {

@@ -11,7 +11,7 @@ const typeFilter = ref('');
 const activeOnly = ref(true);
 const loading = ref(false);
 
-const typeLabels = { offline: '设备失联', cpu_high: 'CPU 过高', memory_high: '内存过高', port_down: '端口中断' };
+const typeLabels = { offline: '设备失联', cpu_high: 'CPU 过高', memory_high: '内存过高', port_down: '端口中断', port_traffic_high: '端口流量异常' };
 const filtered = computed(() => alerts.value.filter((a) =>
   (!severityFilter.value || a.severity === severityFilter.value)
   && (!typeFilter.value || a.type === typeFilter.value)

@@ -113,7 +113,8 @@ export function seedDemo(config) {
   raiseAlert({ deviceId: idMap.get(OFFLINE_IP), deviceIp: OFFLINE_IP, severity: 'critical', type: 'offline', message: '设备失联，SNMP 连续 3 次轮询无响应', value: '离线' });
   raiseAlert({ deviceId: idMap.get('192.168.10.1'), deviceIp: '192.168.10.1', severity: 'warning', type: 'cpu_high', message: 'CPU 利用率超过告警阈值', value: '82%' });
   raiseAlert({ deviceId: idMap.get('192.168.10.12'), deviceIp: '192.168.10.12', severity: 'warning', type: 'memory_high', message: '内存利用率超过告警阈值', value: '78%' });
-  raiseAlert({ deviceId: idMap.get('192.168.20.13'), deviceIp: '192.168.20.13', severity: 'warning', type: 'port_down', message: 'GE1/0/26 端口链路中断', value: 'DOWN' });
+  raiseAlert({ deviceId: idMap.get('192.168.20.13'), deviceIp: '192.168.20.13', severity: 'warning', type: 'port_down', message: 'GE1/0/26 链路中断（曾 UP 后转 DOWN）', value: 'DOWN' });
+  raiseAlert({ deviceId: idMap.get('192.168.10.1'), deviceIp: '192.168.10.1', severity: 'warning', type: 'port_traffic_high', message: 'GE1/0/2 入 92% 流量利用率超阈值', value: '阈值 80%' });
 }
 
 export function tickDemo(config) {

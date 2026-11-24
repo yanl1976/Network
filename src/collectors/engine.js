@@ -1,4 +1,4 @@
-import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries, listMacEntries } from '../db.js';
+import { db, upsertDevice, replaceInterfaces, replaceLinks, addMetric, raiseAlert, resolveAlert, replaceMacEntries, listMacEntries, getPortAlertCandidates } from '../db.js';
 import { collectSnmp, normalizeMac, lookupMacOnDevice, collectMacTable } from './snmp.js';
 import { scanSubnets, fetchConfig } from './network.js';
 import { seedDemo, tickDemo } from './demo.js';
@@ -23,9 +23,21 @@ function applyThresholds(deviceId, ip, cpu, memory, interfaces, config) {
   else resolveAlert('cpu_high', deviceId);
   if (memory >= t.memWarn) raiseAlert({ deviceId, deviceIp: ip, severity: memory >= t.memCritical ? 'critical' : 'warning', type: 'memory_high', message: '内存利用率超过告警阈值', value: `${memory}%` });
   else resolveAlert('memory_high', deviceId);
-  const down = interfaces.find((i) => i.operStatus === 2);
-  if (down) raiseAlert({ deviceId, deviceIp: ip, severity: 'warning', type: 'port_down', message: `${down.name} 端口链路中断`, value: 'DOWN' });
-  else resolveAlert('port_down', deviceId);
+
+  // 端口中断：仅对"曾 UP 过、现在 DOWN"的端口告警（未启用端口 oper_status 恒为 2，不告警）
+  const { downPorts, highTraffic } = getPortAlertCandidates(deviceId, t.portUtilWarn ?? 80);
+  if (downPorts.length) {
+    const shown = downPorts.slice(0, 5).join('、');
+    const more = downPorts.length > 5 ? ` 等 ${downPorts.length} 个端口` : '';
+    raiseAlert({ deviceId, deviceIp: ip, severity: 'warning', type: 'port_down', message: `${shown}${more} 链路中断（曾 UP 后转 DOWN）`, value: `${downPorts.length} 个端口 DOWN` });
+  } else resolveAlert('port_down', deviceId);
+
+  // 流量异常：UP 端口利用率超阈值（入或出任一方向）
+  if (highTraffic.length) {
+    const shown = highTraffic.slice(0, 5).map((p) => `${p.name} 入${p.inUtil.toFixed(0)}%/出${p.outUtil.toFixed(0)}%`).join('、');
+    const more = highTraffic.length > 5 ? ` 等 ${highTraffic.length} 个端口` : '';
+    raiseAlert({ deviceId, deviceIp: ip, severity: 'warning', type: 'port_traffic_high', message: `${shown}${more} 流量利用率超阈值`, value: `阈值 ${t.portUtilWarn ?? 80}%` });
+  } else resolveAlert('port_traffic_high', deviceId);
 }
 
 export function computeInterfaceTraffic(deviceId, interfaces) {
