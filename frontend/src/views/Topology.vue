@@ -395,6 +395,7 @@ watch(() => store.seq, () => {
     </div>
 
     <div class="topo-layout">
+      <div class="topo-left">
       <div class="panel graph-panel">
         <div class="panel-title">
           实时网络拓扑
@@ -442,6 +443,17 @@ watch(() => store.seq, () => {
             <div class="flow-popup-foot">近 {{ flowCurrent.points }} 个采样点 · 入/出流量趋势</div>
           </div>
         </div>
+      </div>
+
+      <div class="panel device-strip">
+        <div class="panel-title">设备快速定位 <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">{{ filteredDevices.length }} 台</span></div>
+        <div class="device-chips">
+          <button v-for="d in filteredDevices" :key="d.ip" class="device-chip" :class="{ active: selectedIp === d.ip, offline: d.status === 'offline' }" @click="selectNode(d.ip)">
+            <span class="chip-dot" :style="{ background: d.status === 'offline' ? '#64748b' : typeColor(d) }" />
+            {{ d.hostname }}
+          </button>
+        </div>
+      </div>
       </div>
 
       <div class="panel detail-panel">
@@ -519,16 +531,6 @@ watch(() => store.seq, () => {
       </div>
     </div>
 
-    <div class="panel device-strip">
-      <div class="panel-title">设备快速定位 <span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">{{ filteredDevices.length }} 台</span></div>
-      <div class="device-chips">
-        <button v-for="d in filteredDevices" :key="d.ip" class="device-chip" :class="{ active: selectedIp === d.ip, offline: d.status === 'offline' }" @click="selectNode(d.ip)">
-          <span class="chip-dot" :style="{ background: d.status === 'offline' ? '#64748b' : typeColor(d) }" />
-          {{ d.hostname }}
-        </button>
-      </div>
-    </div>
-
     <el-dialog v-model="layoutDialog" title="拓扑布局版本" width="520px">
       <div class="layout-hint">保存当前设备排列为版本，切换后控制台与全屏展示均按该版本排布。点击「重排」可回到自动布局。</div>
       <div class="layout-save">
@@ -553,7 +555,9 @@ watch(() => store.seq, () => {
 .topo-page { height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; overflow: hidden; }
 .top-stats { flex: 0 0 auto; }
 .topo-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; }
+.topo-left { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .graph-panel, .detail-panel, .device-strip { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.graph-panel { flex: 1; }
 .toolbar { display: flex; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .graph-area { flex: 1; min-height: 0; position: relative; }
 .graph-canvas { width: 100%; height: 100%; }
