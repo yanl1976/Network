@@ -75,7 +75,12 @@ export function saveConfig(config) {
 }
 
 export function updateSettings(patch) {
-  const next = deepMerge(loadConfig(), patch);
+  const incoming = patch && typeof patch === 'object' ? patch : {};
+  const next = deepMerge(loadConfig(), incoming);
+  // 前端拿到的是脱敏值（community 恒为空），空值不覆盖已配置的真实团体字
+  if (incoming.snmp && !String(incoming.snmp.community ?? '').trim() && next.snmp) {
+    next.snmp.community = loadConfig().snmp?.community ?? '';
+  }
   const stored = stripCredentials(next);
   saveConfig(stored);
   return stored;
@@ -200,6 +205,10 @@ export function getDeviceCredentials(ip, ssh = null) {
 export function publicConfig(config = loadConfig()) {
   const out = JSON.parse(JSON.stringify(config));
   const creds = getDeviceCredentials(null, config.ssh);
+  if (out.snmp) {
+    out.snmp.communityConfigured = !!out.snmp.community;
+    out.snmp.community = '';
+  }
   if (out.ssh) {
     out.ssh.username = creds.username;
     out.ssh.password = '';

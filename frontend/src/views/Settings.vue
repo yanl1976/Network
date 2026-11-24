@@ -132,7 +132,10 @@ onMounted(load);
       <div class="panel settings-card">
         <div class="panel-title">SNMP 采集参数</div>
         <el-form label-width="100px" size="small">
-          <el-form-item label="团体字"><el-input v-model="draft.snmp.community" placeholder="public" /></el-form-item>
+          <el-form-item label="团体字">
+            <el-input v-model="draft.snmp.community" placeholder="留空表示不修改" />
+            <div v-if="config.snmp?.communityConfigured" class="hint" style="padding:2px 0">已配置（出于安全不显示明文），留空保存即保持不变</div>
+          </el-form-item>
           <el-form-item label="协议版本"><el-select v-model="draft.snmp.version"><el-option label="v2c" value="2c" /><el-option label="v3" value="3" /></el-select></el-form-item>
           <el-form-item label="超时(ms)"><el-input-number v-model="draft.snmp.timeout" :min="500" :step="500" /></el-form-item>
           <el-form-item label="重试次数"><el-input-number v-model="draft.snmp.retries" :min="0" :max="5" /></el-form-item>
