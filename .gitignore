@@ -5,3 +5,4 @@ config/app.json
 *.log
 frontend/dist/
 .DS_Store
+DEBUG.md
