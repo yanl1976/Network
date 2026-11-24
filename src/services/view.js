@@ -264,6 +264,43 @@ export function getConfigContent(id) {
   return db.prepare('SELECT * FROM configs WHERE id=?').get(id) ?? null;
 }
 
+// 配置行级 diff（LCS），返回带标记的行序列：context / added / removed
+export function diffConfigs(oldId, newId) {
+  const oldRow = db.prepare('SELECT * FROM configs WHERE id=?').get(oldId);
+  const newRow = db.prepare('SELECT * FROM configs WHERE id=?').get(newId);
+  if (!oldRow || !newRow) return null;
+  const a = String(oldRow.content ?? '').split(/\r?\n/);
+  const b = String(newRow.content ?? '').split(/\r?\n/);
+  const n = a.length, m = b.length;
+  // 大文件保护：超过 800 行时用简化前缀对比，避免 O(n*m) 卡死
+  if (n * m > 640000) {
+    const lines = [];
+    const max = Math.max(n, m);
+    for (let i = 0; i < max; i++) {
+      if (a[i] === b[i]) lines.push({ type: 'context', text: a[i] });
+      else {
+        if (a[i] !== undefined) lines.push({ type: 'removed', text: a[i] });
+        if (b[i] !== undefined) lines.push({ type: 'added', text: b[i] });
+      }
+    }
+    return { old: { id: oldRow.id, capturedAt: oldRow.captured_at, hash: oldRow.hash }, new: { id: newRow.id, capturedAt: newRow.captured_at, hash: newRow.hash }, lines, added: lines.filter(l => l.type === 'added').length, removed: lines.filter(l => l.type === 'removed').length, simplified: true };
+  }
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  }
+  const lines = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { lines.push({ type: 'context', text: a[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { lines.push({ type: 'removed', text: a[i] }); i++; }
+    else { lines.push({ type: 'added', text: b[j] }); j++; }
+  }
+  while (i < n) { lines.push({ type: 'removed', text: a[i++] }); }
+  while (j < m) { lines.push({ type: 'added', text: b[j++] }); }
+  return { old: { id: oldRow.id, capturedAt: oldRow.captured_at, hash: oldRow.hash }, new: { id: newRow.id, capturedAt: newRow.captured_at, hash: newRow.hash }, lines, added: lines.filter(l => l.type === 'added').length, removed: lines.filter(l => l.type === 'removed').length, simplified: false };
+}
+
 export function getMetrics(deviceId, limit = 120) {
   return db.prepare('SELECT cpu, memory, in_traffic, out_traffic, ts FROM metrics WHERE device_id=? ORDER BY ts DESC LIMIT ?').all(deviceId, limit).reverse();
 }

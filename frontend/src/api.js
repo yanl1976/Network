@@ -23,6 +23,7 @@ export const api = {
   resolveAllAlerts: () => request('/alerts/resolve-all', { method: 'POST' }),
   configs: (deviceId) => request(`/configs/${deviceId}`),
   configContent: (id) => request(`/configs/content/${id}`),
+  configDiff: (oldId, newId) => request(`/configs/diff?oldId=${oldId}&newId=${newId}`),
   metrics: (deviceId, limit = 120) => request(`/metrics/${deviceId}?limit=${limit}`),
   poll: () => request('/poll', { method: 'POST' }),
   scan: () => request('/scan', { method: 'POST' }),

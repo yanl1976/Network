@@ -16,6 +16,8 @@ const detail = ref(null);
 const drawer = ref(false);
 const configText = ref('');
 const configDialog = ref(false);
+const configDiff = ref(null);
+const configDiffDialog = ref(false);
 const loading = ref(false);
 const managed = ref([]);
 const editDialog = ref(false);
@@ -154,6 +156,17 @@ async function viewConfig(id) {
   const data = await api.configContent(id);
   configText.value = data.content;
   configDialog.value = true;
+}
+
+async function viewConfigDiff(index) {
+  const list = detail.value?.configs || [];
+  const newer = list[index];
+  const older = list[index + 1];
+  if (!older) { ElMessage.info('没有更早的配置可对比'); return; }
+  try {
+    configDiff.value = await api.configDiff(older.id, newer.id);
+    configDiffDialog.value = true;
+  } catch (error) { ElMessage.error(error.message || '加载对比失败'); }
 }
 
 async function doMacLookup() {
@@ -373,11 +386,12 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
         <div class="drawer-section">
           <div class="drawer-title">配置备份 <span class="muted">({{ detail.configs?.length || 0 }})</span></div>
           <div v-if="!detail.configs?.length" class="muted" style="font-size:12px">暂无配置备份，可在设备清单页执行批量备份</div>
-          <div v-for="cfg in detail.configs || []" :key="cfg.id" class="config-row">
+          <div v-for="(cfg, idx) in detail.configs || []" :key="cfg.id" class="config-row">
             <el-icon><Document /></el-icon>
             <span class="mono">{{ cfg.hash?.slice(0, 10) || '-' }}</span>
             <span class="muted">{{ cfg.captured_at?.replace('T', ' ').slice(0, 19) }}</span>
             <span class="muted">{{ cfg.bytes }} B</span>
+            <el-button v-if="idx < (detail.configs?.length || 0) - 1" link type="warning" size="small" @click="viewConfigDiff(idx)">对比</el-button>
             <el-button link type="primary" size="small" @click="viewConfig(cfg.id)">查看</el-button>
           </div>
         </div>
@@ -416,6 +430,24 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
     <el-dialog v-model="configDialog" title="交换机配置快照" width="70%">
       <pre class="config-text">{{ configText }}</pre>
     </el-dialog>
+
+    <el-dialog v-model="configDiffDialog" title="配置变更对比（新版本 vs 上一版本）" width="80%" v-if="configDiff">
+      <template #header>
+        <div>
+          <span>配置变更对比</span>
+          <span class="muted" style="font-size:11px;margin-left:12px">
+            新增 {{ configDiff.added }} 行 · 删除 {{ configDiff.removed }} 行
+            <span v-if="configDiff.simplified">（大文件简化对比）</span>
+          </span>
+        </div>
+      </template>
+      <div class="config-diff">
+        <div v-for="(line, i) in configDiff.lines" :key="i" class="diff-line" :class="'diff-' + line.type">
+          <span class="diff-sign">{{ line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ' }}</span>
+          <span>{{ line.text }}</span>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -438,6 +470,12 @@ watch(() => store.seq, () => { if (['poll:done', 'poll:error', 'alert:resolved',
 .config-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
 .config-text { max-height: 60vh; overflow: auto; background: #080e1c; color: #9fd0ff; font-size: 11px; line-height: 1.5; padding: 14px; border-radius: 6px; }
 .cred-divider { font-size: 12px; color: #cfe0ff; font-weight: 600; margin: 6px 0 12px 96px; padding-top: 12px; border-top: 1px solid var(--border); }
+.config-diff { max-height: 60vh; overflow: auto; background: #0b1526; border: 1px solid var(--border); border-radius: 6px; padding: 8px 0; }
+.diff-line { display: flex; font-family: Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; padding: 0 12px; }
+.diff-sign { width: 16px; flex: 0 0 16px; user-select: none; }
+.diff-context { color: #9fb4d6; }
+.diff-added { background: rgba(32,201,151,.14); color: #7ee0bd; }
+.diff-removed { background: rgba(255,77,94,.14); color: #ff9aa5; text-decoration: line-through; }
 
 /* 交换机端口面板 */
 .port-switch-wrap { margin-left: auto; display: flex; gap: 6px; }

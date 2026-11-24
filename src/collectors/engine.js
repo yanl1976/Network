@@ -190,9 +190,15 @@ export async function backupConfigs(config, deviceIps = []) {
     const crypto = await import('node:crypto');
     const hash = crypto.createHash('md5').update(result.output).digest('hex');
     const prev = db.prepare('SELECT hash FROM configs WHERE device_id=? ORDER BY captured_at DESC LIMIT 1').get(row.id);
+    const changed = prev ? prev.hash !== hash : true;
     db.prepare('INSERT INTO configs (device_id, ip, content, hash, captured_at) VALUES (?, ?, ?, ?, ?)')
       .run(row.id, device.ip, result.output, hash, new Date().toISOString());
-    return { ip: device.ip, ok: true, hash, changed: prev ? prev.hash !== hash : true, bytes: result.output.length };
+    if (changed && prev) {
+      raiseAlert({ deviceId: row.id, deviceIp: device.ip, severity: 'warning', type: 'config_changed', message: '设备配置发生变更（与上次备份不同）', value: hash.slice(0, 8) });
+    } else if (!changed) {
+      resolveAlert('config_changed', row.id);
+    }
+    return { ip: device.ip, ok: true, hash, changed, bytes: result.output.length };
   }));
   return results.map((r) => r.status === 'fulfilled' ? r.value : { ok: false, error: r.reason?.message });
 }

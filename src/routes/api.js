@@ -5,7 +5,7 @@ import { pollOnce, scanOnce, backupConfigs, lookupMac, collectAllMacTables } fro
 import { checkPorts } from '../collectors/network.js';
 import { seedDemo } from '../collectors/demo.js';
 import { captureDataset, restoreDataset, saveModeSnapshot, loadModeSnapshot } from '../mode-snapshot.js';
-import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics } from '../services/view.js';
+import { getOverview, getDevices, getDeviceDetail, getTopology, getAlerts, getConfigs, getConfigContent, getMetrics, diffConfigs } from '../services/view.js';
 
 const ok = (res, data) => res.json({ code: 0, data });
 const fail = (res, message, status = 500) => res.status(status).json({ code: 1, message });
@@ -71,6 +71,10 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
   router.get('/configs/:deviceId', (req, res) => ok(res, getConfigs(Number(req.params.deviceId))));
   router.get('/configs/content/:id', (req, res) => {
     const data = getConfigContent(Number(req.params.id));
+    return data ? ok(res, data) : fail(res, '配置记录不存在', 404);
+  });
+  router.get('/configs/diff', (req, res) => {
+    const data = diffConfigs(Number(req.query.oldId), Number(req.query.newId));
     return data ? ok(res, data) : fail(res, '配置记录不存在', 404);
   });
   router.get('/metrics/:deviceId', (req, res) => {
