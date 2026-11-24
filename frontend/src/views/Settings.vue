@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { api } from '../api.js';
+import { api, writeToken } from '../api.js';
 import { store, refreshOverview, refreshBranding, applyPageTitle } from '../store.js';
 
 const config = ref(null);
@@ -10,6 +10,8 @@ const saving = ref(false);
 const scanning = ref(false);
 const scanResult = ref(null);
 const subnetInput = ref('');
+const authRequired = ref(false);
+const tokenDraft = ref('');
 
 import { typeColor } from '../device-icons.js';
 
@@ -22,7 +24,10 @@ const defaultBranding = {
 };
 
 async function load() {
-  config.value = await api.settings();
+  const [auth, settings] = await Promise.all([api.authStatus(), api.settings()]);
+  authRequired.value = Boolean(auth.writeAuthRequired);
+  tokenDraft.value = writeToken.get();
+  config.value = settings;
   draft.value = JSON.parse(JSON.stringify(config.value));
   draft.value.scan.ports = (config.value.scan.ports || []).join(', ');
   draft.value.branding = { ...defaultBranding, ...(config.value.branding || {}) };
@@ -64,21 +69,28 @@ async function changeMode(mode) {
   if (config.value.mode === mode) return;
   await ElMessageBox.confirm(
     mode === 'demo'
-      ? '切换后当前真实采集数据会完整保留，下次切回自动恢复；演示模式使用内置 H3C 模拟拓扑。确定继续？'
-      : '切换后当前演示数据会完整保留，下次切回自动恢复；真实采集模式按设备清单执行 SNMP 采集。确定继续？',
+      ? '当前数据集会先保存为快照，然后加载演示拓扑；下次切回真实采集时可从快照恢复。确定继续？'
+      : '当前数据集会先保存为快照；若已有真实采集快照则恢复它，否则保留现有数据并由下一次轮询按真实设备增量采集，不会清空历史数据。确定继续？',
     '切换运行模式', { type: 'info' }
   );
   await api.setMode(mode);
   await load();
   await refreshOverview();
-  ElMessage.success(`已切换到${mode === 'demo' ? '演示模式' : '真实采集模式'}，数据已保留`);
+  ElMessage.success(`已切换到${mode === 'demo' ? '演示模式' : '真实采集模式'}`);
 }
 
 async function reseed() {
-  await ElMessageBox.confirm('将重新生成演示拓扑；另一运行模式的数据不受影响，确定继续？', '重置演示数据', { type: 'warning' });
+  if (config.value.mode === 'live') { ElMessage.warning('真实采集模式下不允许重置演示数据，请先切换到演示模式'); return; }
+  await ElMessageBox.confirm('将清空当前演示数据并重新生成内置 H3C 模拟拓扑；真实采集快照不受影响。确定继续？', '重置演示数据', { type: 'warning' });
   await api.reseed();
   await refreshOverview();
   ElMessage.success('演示数据已重置');
+}
+
+function saveToken() {
+  writeToken.set(tokenDraft.value.trim());
+  tokenDraft.value = writeToken.get();
+  ElMessage.success(tokenDraft.value ? '写操作令牌已保存到本机浏览器' : '写操作令牌已清除');
 }
 
 async function runScan() {
@@ -118,7 +130,16 @@ onMounted(load);
         </div>
         <el-alert :type="config.mode === 'demo' ? 'warning' : 'success'" :closable="false" style="margin-top:12px"
           :title="config.mode === 'demo' ? '当前为演示模式，所有指标为模拟生成' : '当前为真实采集模式，数据来自设备'" />
-        <el-button size="small" style="margin-top:12px" @click="reseed">重置演示数据</el-button>
+        <el-button v-if="config.mode === 'demo'" size="small" style="margin-top:12px" @click="reseed">重置演示数据</el-button>
+      </div>
+
+      <div v-if="authRequired" class="panel settings-card">
+        <div class="panel-title">写操作令牌</div>
+        <div class="hint" style="padding:14px 0 8px">服务端已启用写操作鉴权（NETWORK_WRITE_TOKEN）。在此输入令牌后，本浏览器的新增/修改/删除请求将自动携带 X-API-Token 请求头。</div>
+        <el-form label-width="96px" size="small">
+          <el-form-item label="访问令牌"><el-input v-model="tokenDraft" type="password" show-password placeholder="输入 .env 中的 NETWORK_WRITE_TOKEN" /></el-form-item>
+        </el-form>
+        <el-button size="small" type="primary" @click="saveToken">保存令牌到本机</el-button>
       </div>
 
       <div class="panel settings-card">

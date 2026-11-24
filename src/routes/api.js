@@ -12,8 +12,17 @@ import { buildReport } from '../services/report.js';
 const ok = (res, data) => res.json({ code: 0, data });
 const fail = (res, message, status = 500) => res.status(status).json({ code: 1, message });
 
-export function createApi(configHolder, broadcast, onSettingsChanged = () => {}) {
+export function createApi(configHolder, broadcast, onSettingsChanged = () => {}, writeToken = '') {
   const router = express.Router();
+
+  // 最小写操作鉴权：未配置 NETWORK_API_TOKEN 时保持兼容（内网工具默认开放），
+  // 配置后所有非只读请求必须带 X-API-Token，防止写 API 被任意调用。
+  router.use((req, res, next) => {
+    if (!writeToken || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    if (req.headers['x-api-token'] === writeToken) return next();
+    return fail(res, '需要有效的写操作令牌（X-API-Token）', 401);
+  });
+  router.get('/auth-status', (_req, res) => ok(res, { writeAuthRequired: Boolean(writeToken) }));
 
   router.get('/overview', (_req, res) => ok(res, getOverview(configHolder.current)));
   router.get('/managed-devices', (_req, res) => ok(res, getManagedDevices()));
@@ -146,6 +155,8 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
     const previous = configHolder.current?.mode === 'live' ? 'live' : 'demo';
     if (target === previous) return ok(res, { mode: target });
     try {
+      // 先保存当前模式数据快照，再切换；无目标快照时不再清空全库，
+      // 仅让下一次轮询按新模式增量写入，避免误触导致真实数据被清。
       saveModeSnapshot(previous, captureDataset());
       configHolder.current = updateSettings({ mode: target });
       const snapshot = loadModeSnapshot(target);
@@ -153,18 +164,20 @@ export function createApi(configHolder, broadcast, onSettingsChanged = () => {})
         restoreDataset(snapshot);
       } else if (target === 'demo') {
         seedDemo(configHolder.current);
-      } else {
-        restoreDataset(null);
-        await pollOnce(configHolder.current);
       }
+      // target==='live' 且无快照：保留现有数据，由下一次 poll 增量采集
       onSettingsChanged();
       broadcast({ type: 'mode:changed', mode: target });
-      return ok(res, { mode: target, restored: Boolean(snapshot) });
+      return ok(res, { mode: target, restored: Boolean(snapshot), cleared: false });
     } catch (error) { return fail(res, error.message); }
   });
   router.post('/reseed', (_req, res) => {
     try {
-      configHolder.current = loadConfig();
+      const current = loadConfig();
+      if (current.mode === 'live') {
+        return fail(res, '真实采集模式下不允许重置演示数据，请先切换到演示模式', 403);
+      }
+      configHolder.current = current;
       seedDemo(configHolder.current);
       saveModeSnapshot('demo', captureDataset());
       broadcast({ type: 'data:reset' });

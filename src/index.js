@@ -2,7 +2,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import express from 'express';
-import { loadConfig } from './config.js';
+import { loadConfig, loadEnv } from './config.js';
 import { initialize } from './collectors/engine.js';
 import { createApi } from './routes/api.js';
 import { attachRealtime } from './realtime.js';
@@ -17,7 +17,8 @@ app.use(express.json({ limit: '5mb' }));
 const server = http.createServer(app);
 const realtime = attachRealtime(server);
 const scheduler = startScheduler(configHolder, realtime);
-app.use('/api', createApi(configHolder, realtime.broadcast, () => scheduler.schedule()));
+const writeToken = process.env.NETWORK_WRITE_TOKEN || loadEnv().NETWORK_WRITE_TOKEN || '';
+app.use('/api', createApi(configHolder, realtime.broadcast, () => scheduler.schedule(), writeToken));
 
 const dist = path.resolve(import.meta.dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(dist)) {
@@ -44,6 +45,7 @@ server.listen(port, () => {
   console.log(`H3C 网络拓扑系统已启动: http://localhost:${port}`);
   console.log(`运行模式: ${configHolder.current.mode === 'demo' ? '演示数据' : '真实采集'} | 初始化: ${JSON.stringify(bootstrap)}`);
   console.log(`轮询间隔: ${scheduler.expression} | WebSocket: /ws`);
+  console.log(`写操作鉴权: ${writeToken ? '已启用 (NETWORK_WRITE_TOKEN)' : '未启用（内网默认开放）'}`);
 });
 
 function shutdown() {

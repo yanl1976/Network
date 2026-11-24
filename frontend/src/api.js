@@ -1,6 +1,14 @@
+const WRITE_TOKEN_KEY = 'network_write_token';
+export const writeToken = {
+  get: () => localStorage.getItem(WRITE_TOKEN_KEY) || '',
+  set: (value) => { if (value) localStorage.setItem(WRITE_TOKEN_KEY, value); else localStorage.removeItem(WRITE_TOKEN_KEY); }
+};
+
 async function request(path, options = {}) {
+  const method = options.method || 'GET';
+  const token = method === 'GET' ? '' : writeToken.get();
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-API-Token': token } : {}) },
     ...options
   });
   const payload = await res.json().catch(() => ({ code: 1, message: '响应解析失败' }));
@@ -37,6 +45,7 @@ export const api = {
   macCollect: () => request('/mac-collect', { method: 'POST' }),
   portCheck: (ip, ports = [22, 80, 161, 443]) => request('/tools/port-check', { method: 'POST', body: JSON.stringify({ ip, ports }) }),
   backup: (ips = []) => request('/backup', { method: 'POST', body: JSON.stringify({ ips }) }),
+  authStatus: () => request('/auth-status'),
   settings: () => request('/settings'),
   saveSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   setMode: (mode) => request('/mode', { method: 'POST', body: JSON.stringify({ mode }) }),
